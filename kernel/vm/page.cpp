@@ -14,6 +14,9 @@
 #include <vm/physmap.h>
 #include <vm/pmm.h>
 #include <vm/vm.h>
+#include <trace.h>
+
+#define LOCAL_TRACE 0
 
 const char* page_state_to_string(unsigned int state) {
     switch (state) {
@@ -34,7 +37,15 @@ const char* page_state_to_string(unsigned int state) {
     }
 }
 
-void dump_page(const vm_page_t* page) {
+void vm_page::set_state_alloc() {
+    LTRACEF("page %p: prev state %s\n", this, page_state_to_string(state));
+
+    DEBUG_ASSERT(state == VM_PAGE_STATE_FREE);
+
+    state = VM_PAGE_STATE_ALLOC;
+}
+
+void dump_page(const vm_page* page) {
     printf("page %p: address %#" PRIxPTR " state %s flags %#x\n", page, vm_page_to_paddr(page),
            page_state_to_string(page->state), page->flags);
 }

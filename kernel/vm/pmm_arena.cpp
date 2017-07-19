@@ -26,7 +26,7 @@ zx_status_t PmmArena::Init(const pmm_arena_info_t* info, PmmNode* node) {
 
     /* allocate an array of pages to back this one */
     size_t page_count = size() / PAGE_SIZE;
-    size_t page_array_size = ROUNDUP_PAGE_SIZE(page_count * VM_PAGE_STRUCT_SIZE);
+    size_t page_array_size = ROUNDUP_PAGE_SIZE(page_count * sizeof(vm_page));
 
     // if the arena is too small to be useful, bail
     if (page_array_size >= size()) {
@@ -67,8 +67,9 @@ zx_status_t PmmArena::Init(const pmm_arena_info_t* info, PmmNode* node) {
     list_initialize(&list);
     for (size_t i = 0; i < page_count; i++) {
         auto& p = page_array_[i];
+
         p.paddr = base() + i * PAGE_SIZE;
-        LTRACEF_LEVEL(2, "p %p, paddr 0x%lx\n", &p, p.paddr);
+        p.state = VM_PAGE_STATE_FREE;
 
         list_add_tail(&list, &p.node);
     }
@@ -110,7 +111,7 @@ retry:
     while ((start < size() / PAGE_SIZE) && ((start + count) <= size() / PAGE_SIZE)) {
         vm_page_t* p = &page_array_[start];
         for (uint i = 0; i < count; i++) {
-            if (!page_is_free(p)) {
+            if (!p->is_free()) {
                 /* this run is broken, break out of the inner loop.
                  * start over at the next alignment boundary
                  */
@@ -165,7 +166,7 @@ void PmmArena::Dump(bool dump_pages, bool dump_free_ranges) const {
         printf("\tfree ranges:\n");
         ssize_t last = -1;
         for (size_t i = 0; i < size() / PAGE_SIZE; i++) {
-            if (page_is_free(&page_array_[i])) {
+            if (page_array_[i].is_free()) {
                 if (last == -1) {
                     last = i;
                 }
