@@ -71,7 +71,7 @@ zx_status_t PmmArena::Init(const pmm_arena_info_t* info, PmmNode* node) {
         p.paddr = base() + i * PAGE_SIZE;
         p.state = VM_PAGE_STATE_FREE;
 
-        list_add_tail(&list, &p.node);
+        list_add_tail(&list, &p.queue_node);
     }
 
     node->AddFreePages(&list);

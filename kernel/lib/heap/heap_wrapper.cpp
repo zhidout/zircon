@@ -151,7 +151,7 @@ void *heap_page_alloc(size_t pages)
     if (likely(result)) {
         // mark all of the allocated page as HEAP
         vm_page_t *p;
-        list_for_every_entry(&list, p, vm_page_t, free.node) {
+        list_for_every_entry(&list, p, vm_page_t, queue_node) {
             p->state = VM_PAGE_STATE_HEAP;
         }
     }

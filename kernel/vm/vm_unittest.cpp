@@ -906,7 +906,7 @@ static bool arch_noncontiguous_map() {
     {
         size_t i = 0;
         vm_page_t* p;
-        list_for_every_entry(&phys_list, p, vm_page_t, free.node) {
+        list_for_every_entry(&phys_list, p, vm_page_t, queue_node) {
             phys[i] = vm_page_to_paddr(p);
             ++i;
         }

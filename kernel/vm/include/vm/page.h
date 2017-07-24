@@ -20,7 +20,7 @@ class VmObject;
 
 // core per page structure allocated at pmm arena creation time
 typedef struct vm_page {
-    struct list_node node;
+    struct list_node queue_node;
     paddr_t paddr;
     // offset 0x18
 
@@ -34,7 +34,7 @@ typedef struct vm_page {
     union {
         struct {
             // in allocated/just freed state, use a linked list to hold the page in a queue
-            struct list_node node;
+            //struct list_node node;
             // offset: 0x30
         } free;
         struct {
@@ -58,7 +58,6 @@ typedef struct vm_page {
 
     // state manipulation routines
     void set_state_alloc();
-    void set_state_object(VmObject *obj, uint64_t offset);
 } vm_page_t;
 
 // assert that the page structure isn't growing uncontrollably
@@ -82,3 +81,7 @@ inline bool vm_page::is_free() {
 
 const char* page_state_to_string(unsigned int state);
 void dump_page(const vm_page_t* page);
+
+// state transition routines
+void pmm_page_set_state_alloc(vm_page *page);
+void pmm_page_set_state_wired(vm_page *page);

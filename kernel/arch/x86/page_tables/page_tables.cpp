@@ -178,7 +178,7 @@ public:
     void queue_free(vm_page_t* page) TA_NO_THREAD_SAFETY_ANALYSIS {
         DEBUG_ASSERT(pt_->lock_.IsHeld());
 
-        list_add_tail(&to_free_, &page->free.node);
+        list_add_tail(&to_free_, &page->queue_node);
         pt_->pages_--;
     }
 
@@ -513,6 +513,7 @@ bool X86PageTableBase::RemoveMapping(volatile pt_entry_t* table, PageTableLevel 
             DEBUG_ASSERT_MSG(page->state == VM_PAGE_STATE_MMU,
                              "page %p state %u, paddr %#" PRIxPTR "\n", page, page->state,
                              X86_VIRT_TO_PHYS(next_table));
+            DEBUG_ASSERT(!list_in_list(&page->queue_node));
 
             cm->queue_free(page);
             unmapped = true;

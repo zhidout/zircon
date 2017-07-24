@@ -17,6 +17,18 @@
 
 using fbl::AutoLock;
 
+namespace {
+
+void set_state_alloc(vm_page *page) {
+    LTRACEF("page %p: prev state %s\n", page, page_state_to_string(page->state));
+
+    DEBUG_ASSERT(page->state == VM_PAGE_STATE_FREE);
+
+    page->state = VM_PAGE_STATE_ALLOC;
+}
+
+} // anon namespace
+
 PmmNode::PmmNode() {
 }
 
@@ -69,10 +81,10 @@ done_add:
 void PmmNode::AddFreePages(list_node *list) {
     LTRACEF("list %p\n", list);
 
-    vm_page_t *temp, *page;
-    list_for_every_entry_safe(list, page, temp, vm_page_t, node) {
-        list_delete(&page->node);
-        list_add_tail(&free_list_, &page->node);
+    vm_page *temp, *page;
+    list_for_every_entry_safe(list, page, temp, vm_page, queue_node) {
+        list_delete(&page->queue_node);
+        list_add_tail(&free_list_, &page->queue_node);
         free_count_++;
     }
 
@@ -82,7 +94,7 @@ void PmmNode::AddFreePages(list_node *list) {
 vm_page_t* PmmNode::AllocPage(uint alloc_flags, paddr_t* pa) {
     AutoLock al(&lock_);
 
-    vm_page_t* page = list_remove_head_type(&free_list_, vm_page_t, node);
+    vm_page* page = list_remove_head_type(&free_list_, vm_page, queue_node);
     if (!page)
         return nullptr;
 
@@ -92,7 +104,7 @@ vm_page_t* PmmNode::AllocPage(uint alloc_flags, paddr_t* pa) {
 
     DEBUG_ASSERT(page->is_free());
 
-    page->set_state_alloc();
+    set_state_alloc(page);
 
 #if PMM_ENABLE_FREE_FILL
     CheckFreeFill(page);
@@ -120,7 +132,7 @@ size_t PmmNode::AllocPages(size_t count, uint alloc_flags, list_node* list) {
 
     size_t allocated = 0;
     while (allocated < count) {
-        vm_page_t* page = list_remove_head_type(&free_list_, vm_page_t, node);
+        vm_page* page = list_remove_head_type(&free_list_, vm_page, queue_node);
         if (!page)
             return allocated;
 
@@ -136,7 +148,7 @@ size_t PmmNode::AllocPages(size_t count, uint alloc_flags, list_node* list) {
 #endif
 
         page->state = VM_PAGE_STATE_ALLOC;
-        list_add_tail(list, &page->free.node);
+        list_add_tail(list, &page->queue_node);
 
         allocated++;
     }
@@ -165,12 +177,12 @@ size_t PmmNode::AllocRange(paddr_t address, size_t count, list_node* list) {
             if (!page->is_free())
                 break;
 
-            list_delete(&page->node);
+            list_delete(&page->queue_node);
 
             page->state = VM_PAGE_STATE_ALLOC;
 
             if (list)
-                list_add_tail(list, &page->free.node);
+                list_add_tail(list, &page->queue_node);
 
             allocated++;
             address += PAGE_SIZE;
@@ -208,9 +220,9 @@ size_t PmmNode::AllocContiguous(const size_t count, uint alloc_flags, uint8_t al
         /* remove the pages from the run out of the free list */
         for (size_t i = 0; i < count; i++, p++) {
             DEBUG_ASSERT_MSG(p->is_free(), "p %p state %u\n", p, p->state);
-            DEBUG_ASSERT(list_in_list(&p->node));
+            DEBUG_ASSERT(list_in_list(&p->queue_node));
 
-            list_delete(&p->node);
+            list_delete(&p->queue_node);
             p->state = VM_PAGE_STATE_ALLOC;
 
             DEBUG_ASSERT(free_count_ > 0);
@@ -222,7 +234,7 @@ size_t PmmNode::AllocContiguous(const size_t count, uint alloc_flags, uint8_t al
 #endif
 
             if (list)
-                list_add_tail(list, &p->free.node);
+                list_add_tail(list, &p->queue_node);
         }
 
         return count;
@@ -241,8 +253,9 @@ size_t PmmNode::Free(list_node* list) {
 
     uint count = 0;
     while (!list_is_empty(list)) {
-        vm_page_t* page = list_remove_head_type(list, vm_page_t, free.node);
+        vm_page* page = list_remove_head_type(list, vm_page, queue_node);
 
+        LTRACEF("page %p state %u\n", page, page->state);
         DEBUG_ASSERT(page->state != VM_PAGE_STATE_OBJECT || page->object.pin_count == 0);
         DEBUG_ASSERT(!page->is_free());
 
@@ -251,14 +264,14 @@ size_t PmmNode::Free(list_node* list) {
 #endif
 
         // remove it from its old queue
-        if (list_in_list(&page->node))
-            list_delete(&page->node);
+        if (list_in_list(&page->queue_node))
+            list_delete(&page->queue_node);
 
         // mark it free
         page->state = VM_PAGE_STATE_FREE;
 
         // add it to the free queue
-        list_add_head(&free_list_, &page->node);
+        list_add_head(&free_list_, &page->queue_node);
 
         free_count_++;
         count++;
@@ -267,6 +280,31 @@ size_t PmmNode::Free(list_node* list) {
     LTRACEF("returning count %u\n", count);
 
     return count;
+}
+
+void PmmNode::Free(vm_page* page) {
+    LTRACEF("page %p, pa %#" PRIxPTR "\n", page, page->paddr);
+
+    AutoLock al(&lock_);
+
+    DEBUG_ASSERT(page->state != VM_PAGE_STATE_OBJECT || page->object.pin_count == 0);
+    DEBUG_ASSERT(!page->is_free());
+
+#if PMM_ENABLE_FREE_FILL
+    FreeFill(page);
+#endif
+
+    // remove it from its old queue
+    if (list_in_list(&page->queue_node))
+        list_delete(&page->queue_node);
+
+    // mark it free
+    page->state = VM_PAGE_STATE_FREE;
+
+    // add it to the free queue
+    list_add_head(&free_list_, &page->queue_node);
+
+    free_count_++;
 }
 
 uint64_t PmmNode::CountFreePages() const {
@@ -309,8 +347,8 @@ void PmmNode::Dump(bool is_panic) const TA_NO_THREAD_SAFETY_ANALYSIS {
 void PmmNode::EnforceFill() {
     DEBUG_ASSERT(!enforce_fill_);
 
-    vm_page_t* page;
-    list_for_every_entry (&free_list_, page, vm_page_t, node) {
+    vm_page* page;
+    list_for_every_entry (&free_list_, page, vm_page, queue_node) {
         FreeFill(page);
     }
 
