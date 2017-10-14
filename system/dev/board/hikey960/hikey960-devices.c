@@ -160,6 +160,9 @@ static const pbus_gpio_t gpio_test_gpios[] = {
     {
         .gpio = GPIO_USER_LED4,
     },
+    {
+        .gpio = GPIO_PWRON_DET,
+    },
 };
 
 static const pbus_dev_t gpio_test_dev = {
