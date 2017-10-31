@@ -448,19 +448,25 @@ zx_status_t xhci_start(xhci_t* xhci) {
 static void xhci_slot_stop(xhci_slot_t* slot) {
     for (int i = 0; i < XHCI_NUM_EPS; i++) {
         xhci_endpoint_t* ep = &slot->eps[i];
+        list_node_t temp_list = LIST_INITIAL_VALUE(temp_list);
 
         mtx_lock(&ep->lock);
-        if (ep->state != EP_STATE_DEAD) {
-            usb_request_t* req;
-            while ((req = list_remove_tail_type(&ep->pending_reqs, usb_request_t, node)) != NULL) {
-                usb_request_complete(req, ZX_ERR_IO_NOT_PRESENT, 0);
+        if (ep->state != EP_STATE_DISABLED) {
+            // move pending and queued requests to temp_list
+            list_move(&ep->pending_reqs, &temp_list);
+            list_node_t* node;
+            while ((node = list_remove_tail(&ep->queued_reqs)) != NULL) {
+                list_add_tail(&temp_list, node);
             }
-            while ((req = list_remove_tail_type(&ep->queued_reqs, usb_request_t, node)) != NULL) {
-                usb_request_complete(req, ZX_ERR_IO_NOT_PRESENT, 0);
-            }
-            ep->state = EP_STATE_DEAD;
+            ep->state = EP_STATE_DISABLED;
         }
         mtx_unlock(&ep->lock);
+
+        // to be safe, complete requests outside of the lock
+        usb_request_t* req;
+        while ((req = list_remove_tail_type(&temp_list, usb_request_t, node)) != NULL) {
+            usb_request_complete(req, ZX_ERR_IO_NOT_PRESENT, 0);
+        }
     }
 }
 

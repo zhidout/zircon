@@ -434,6 +434,7 @@ static zx_status_t usb_xhci_bind(void* ctx, zx_device_t* parent, void** cookie) 
     platform_device_protocol_t pdev;
     zx_status_t status;
 
+driver_set_log_flags(7);
     if ((status = device_get_protocol(parent, ZX_PROTOCOL_PCI, &pci)) == ZX_OK) {
         return usb_xhci_bind_pci(parent, &pci);
     }

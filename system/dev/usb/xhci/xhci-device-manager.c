@@ -343,21 +343,17 @@ disable_slot_exit:
 }
 
 static zx_status_t xhci_stop_endpoint(xhci_t* xhci, uint32_t slot_id, int ep_index,
-                                      xhci_ep_state_t new_state, zx_status_t complete_status) {
+                                      zx_status_t complete_status) {
     xhci_slot_t* slot = &xhci->slots[slot_id];
     xhci_endpoint_t* ep =  &slot->eps[ep_index];
     xhci_transfer_ring_t* transfer_ring = &ep->transfer_ring;
-
-    if (new_state == EP_STATE_RUNNING) {
-        return ZX_ERR_INTERNAL;
-    }
 
     mtx_lock(&ep->lock);
     if (ep->state != EP_STATE_RUNNING) {
         mtx_unlock(&ep->lock);
         return ZX_ERR_BAD_STATE;
     }
-    ep->state = new_state;
+    ep->state = EP_STATE_DISABLED;
     mtx_unlock(&ep->lock);
 
     xhci_sync_command_t command;
@@ -416,9 +412,12 @@ static zx_status_t xhci_handle_disconnect_device(xhci_t* xhci, uint32_t hub_addr
 
     uint32_t drop_flags = 0;
     for (int i = 0; i < XHCI_NUM_EPS; i++) {
-        if (slot->eps[i].state != EP_STATE_DEAD) {
-            zx_status_t status = xhci_stop_endpoint(xhci, slot_id, i, EP_STATE_DEAD,
-                                                    ZX_ERR_IO_NOT_PRESENT);
+        xhci_endpoint_t* ep = &slot->eps[i];
+        mtx_lock(&ep->lock);
+        xhci_ep_state_t state = ep->state;
+        mtx_unlock(&ep->lock);
+        if (state != EP_STATE_DISABLED) {
+            zx_status_t status = xhci_stop_endpoint(xhci, slot_id, i, ZX_ERR_IO_NOT_PRESENT);
             if (status != ZX_OK) {
                 zxlogf(ERROR, "xhci_handle_disconnect_device: xhci_stop_endpoint failed: %d\n",
                         status);
@@ -646,7 +645,7 @@ zx_status_t xhci_enable_endpoint(xhci_t* xhci, uint32_t slot_id, usb_endpoint_de
         XHCI_SET_BITS32(&sc->sc0, SLOT_CTX_CONTEXT_ENTRIES_START, SLOT_CTX_CONTEXT_ENTRIES_BITS,
                         index + 1);
     } else {
-        xhci_stop_endpoint(xhci, slot_id, index, EP_STATE_DISABLED, ZX_ERR_BAD_STATE);
+        xhci_stop_endpoint(xhci, slot_id, index, ZX_ERR_BAD_STATE);
         XHCI_WRITE32(&icc->drop_context_flags, XHCI_ICC_EP_FLAG(index));
     }
 

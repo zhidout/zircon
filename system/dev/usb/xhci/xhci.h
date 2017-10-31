@@ -54,11 +54,10 @@ typedef struct {
 } xhci_transfer_state_t;
 
 typedef enum {
-    EP_STATE_DEAD = 0,      // device does not exist or has been removed
-    EP_STATE_RUNNING,
+    EP_STATE_DISABLED,      // endpoint is not enabled
+    EP_STATE_RUNNING,       // endpoint is enabled and operational
     EP_STATE_HALTED,        // halted due to stall or error condition
     EP_STATE_PAUSED,        // temporarily stopped for canceling a transfer
-    EP_STATE_DISABLED,      // endpoint is not enabled
 } xhci_ep_state_t;
 
 typedef struct {
