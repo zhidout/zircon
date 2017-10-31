@@ -234,7 +234,7 @@ static int compute_interval(usb_endpoint_descriptor_t* ep, usb_speed_t speed) {
 }
 
 static void xhci_disable_slot(xhci_t* xhci, uint32_t slot_id) {
-    xhci_send_command(xhci, TRB_CMD_DISABLE_SLOT, 0, (slot_id << TRB_SLOT_ID_START));
+    xhci_post_command(xhci, TRB_CMD_DISABLE_SLOT, 0, (slot_id << TRB_SLOT_ID_START), NULL);
 
     zxlogf(TRACE, "cleaning up slot %d\n", slot_id);
     xhci_slot_t* slot = &xhci->slots[slot_id];

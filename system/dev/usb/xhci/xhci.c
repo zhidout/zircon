@@ -560,7 +560,9 @@ static void xhci_handle_command_complete_event(xhci_t* xhci, xhci_trb_t* event_t
     xhci->command_contexts[index] = NULL;
     mtx_unlock(&xhci->command_ring_lock);
 
-    context->callback(context->data, cc, command_trb, event_trb);
+    if (context) {
+        context->callback(context->data, cc, command_trb, event_trb);
+    }
 }
 
 static void xhci_handle_mfindex_wrap(xhci_t* xhci) {
