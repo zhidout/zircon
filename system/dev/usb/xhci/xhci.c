@@ -522,7 +522,7 @@ void xhci_free(xhci_t* xhci) {
 void xhci_post_command(xhci_t* xhci, uint32_t command, uint64_t ptr, uint32_t control_bits,
                        xhci_command_context_t* context) {
     // FIXME - check that command ring is not full?
-
+printf("xhci_post_command %u\n", command);
     mtx_lock(&xhci->command_ring_lock);
 
     xhci_transfer_ring_t* cr = &xhci->command_ring;

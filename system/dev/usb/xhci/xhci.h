@@ -58,6 +58,8 @@ typedef enum {
     EP_STATE_RUNNING,       // endpoint is enabled and operational
     EP_STATE_HALTED,        // halted due to stall or error condition
     EP_STATE_PAUSED,        // temporarily stopped for canceling a transfer
+    EP_STATE_DISABLING,     // endpoint is transitioning to the disabled state
+    EP_STATE_ENABLING,      // endpoint is transitioning to the enabled state
 } xhci_ep_state_t;
 
 typedef struct {

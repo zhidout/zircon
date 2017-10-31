@@ -240,10 +240,12 @@ static void xhci_disable_slot(xhci_t* xhci, uint32_t slot_id) {
     xhci_slot_t* slot = &xhci->slots[slot_id];
     for (int i = 0; i < XHCI_NUM_EPS; i++) {
         xhci_endpoint_t* ep = &slot->eps[i];
+        mtx_lock(&ep->lock);
         xhci_transfer_ring_free(&ep->transfer_ring);
         free(ep->transfer_state);
         ep->transfer_state = NULL;
         ep->state = EP_STATE_DISABLED;
+        mtx_unlock(&ep->lock);
     }
     io_buffer_release(&slot->buffer);
     slot->sc = NULL;
@@ -353,7 +355,7 @@ static zx_status_t xhci_stop_endpoint(xhci_t* xhci, uint32_t slot_id, int ep_ind
         mtx_unlock(&ep->lock);
         return ZX_ERR_BAD_STATE;
     }
-    ep->state = EP_STATE_DISABLED;
+    ep->state = EP_STATE_DISABLING;
     mtx_unlock(&ep->lock);
 
     xhci_sync_command_t command;
@@ -559,13 +561,23 @@ zx_status_t xhci_enable_endpoint(xhci_t* xhci, uint32_t slot_id, usb_endpoint_de
     usb_speed_t speed = slot->speed;
     uint32_t index = xhci_endpoint_index(ep_desc->bEndpointAddress);
     xhci_endpoint_t* ep = &slot->eps[index];
+    zx_status_t status = ZX_OK;
 
     mtx_lock(&ep->lock);
-
     if ((enable && ep->state == EP_STATE_RUNNING) || (!enable && ep->state == EP_STATE_DISABLED)) {
         mtx_unlock(&ep->lock);
         return ZX_OK;
     }
+    if (enable && !ep->transfer_state) {
+        ep->transfer_state = calloc(1, sizeof(xhci_transfer_state_t));
+        if (!ep->transfer_state) {
+            mtx_unlock(&ep->lock);
+            return ZX_ERR_NO_MEMORY;
+        }
+    }
+
+    ep->state = (enable ? EP_STATE_ENABLING : EP_STATE_DISABLING);
+    mtx_unlock(&ep->lock);
 
     mtx_lock(&xhci->input_context_lock);
     xhci_input_control_context_t* icc = (xhci_input_control_context_t*)xhci->input_context;
@@ -608,11 +620,10 @@ zx_status_t xhci_enable_endpoint(xhci_t* xhci, uint32_t slot_id, usb_endpoint_de
                 (xhci_endpoint_context_t*)&xhci->input_context[(index + 2) * xhci->context_size];
         memset((void*)epc, 0, xhci->context_size);
         // allocate a transfer ring for the endpoint
-        zx_status_t status = xhci_transfer_ring_init(&ep->transfer_ring, TRANSFER_RING_SIZE);
+        status = xhci_transfer_ring_init(&ep->transfer_ring, TRANSFER_RING_SIZE);
         if (status < 0) {
             mtx_unlock(&xhci->input_context_lock);
-            mtx_unlock(&ep->lock);
-            return status;
+            goto fail;
         }
 
         zx_paddr_t tr_dequeue = xhci_transfer_ring_start_phys(&slot->eps[index].transfer_ring);
@@ -658,18 +669,16 @@ zx_status_t xhci_enable_endpoint(xhci_t* xhci, uint32_t slot_id, usb_endpoint_de
                        (index + 2) * xhci->context_size, xhci->context_size);
 #endif
 
-    zx_status_t status = xhci_send_command(xhci, TRB_CMD_CONFIGURE_EP, icc_phys,
+    status = xhci_send_command(xhci, TRB_CMD_CONFIGURE_EP, icc_phys,
                                            (slot_id << TRB_SLOT_ID_START));
     mtx_unlock(&xhci->input_context_lock);
 
-    // xhci_stop_endpoint() will handle the !enable case
+fail:
+    mtx_lock(&ep->lock);
     if (status == ZX_OK && enable) {
-        ep->transfer_state = calloc(1, sizeof(xhci_transfer_state_t));
-        if (!ep->transfer_state) {
-            status = ZX_ERR_NO_MEMORY;
-        } else {
-            ep->state = EP_STATE_RUNNING;
-        }
+        ep->state = EP_STATE_RUNNING;
+     } else {
+        ep->state = EP_STATE_DISABLED;
     }
     mtx_unlock(&ep->lock);
 

@@ -63,9 +63,12 @@ zx_status_t xhci_reset_endpoint(xhci_t* xhci, uint32_t slot_id, uint32_t ep_inde
 
     mtx_lock(&ep->lock);
 
-    if (ep->state != EP_STATE_HALTED) {
+    if (ep->state == EP_STATE_RUNNING || EP_STATE_PAUSED) {
         mtx_unlock(&ep->lock);
         return ZX_OK;
+    } else if (ep->state != EP_STATE_HALTED) {
+        mtx_unlock(&ep->lock);
+        return ZX_ERR_BAD_STATE;
     }
 
     int ep_ctx_state = xhci_get_ep_ctx_state(slot, ep);
@@ -499,6 +502,8 @@ zx_status_t xhci_queue_transfer(xhci_t* xhci, usb_request_t* req) {
         status = ZX_ERR_IO_REFUSED;
         break;
     case EP_STATE_DISABLED:
+    case EP_STATE_ENABLING:
+    case EP_STATE_DISABLING:
         status = ZX_ERR_BAD_STATE;
         break;
     default:
@@ -742,6 +747,8 @@ void xhci_handle_transfer_event(xhci_t* xhci, xhci_trb_t* trb) {
                     result = ZX_ERR_CANCELED;
                     break;
                 case EP_STATE_DISABLED:
+                case EP_STATE_ENABLING:
+                case EP_STATE_DISABLING:
                     result = ZX_ERR_BAD_STATE;
                     break;
                 default:
@@ -827,7 +834,8 @@ void xhci_handle_transfer_event(xhci_t* xhci, xhci_trb_t* trb) {
     list_node_t completed_reqs = LIST_INITIAL_VALUE(completed_reqs);
     list_add_head(&completed_reqs, &req->node);
 
-    if (result == ZX_ERR_IO_REFUSED && ep->state != EP_STATE_DISABLED) {
+    if (result == ZX_ERR_IO_REFUSED &&
+        (ep->state == EP_STATE_RUNNING || ep->state == EP_STATE_PAUSED)) {
         ep->state = EP_STATE_HALTED;
     } else if (ep->state == EP_STATE_RUNNING) {
         xhci_process_transactions_locked(xhci, slot, ep_index, &completed_reqs);
