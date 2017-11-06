@@ -88,8 +88,10 @@ static const pbus_dev_t mali_dev = {
 };
 
 zx_status_t hi3360_add_devices(hi3660_bus_t* bus) {
+printf("hi3360_add_devices\n");
     zx_status_t status;
 
+printf("hi3360_add_devices pbus ctx %p\n", bus->pbus.ctx);
     if ((status = pbus_device_add(&bus->pbus, &dwc3_dev, 0)) != ZX_OK) {
         zxlogf(ERROR, "hi3360_add_devices could not add dwc3_dev: %d\n", status);
         return status;

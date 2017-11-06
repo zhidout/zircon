@@ -50,6 +50,7 @@ zx_status_t platform_bus_register_protocols(void* ctx, const pbus_protocol_t* pr
 
 static zx_status_t platform_bus_device_add(void* ctx, const pbus_dev_t* dev, uint32_t flags) {
     platform_bus_t* bus = ctx;
+printf("platform_bus_device_add %p\n", bus); 
     return platform_device_add(bus, dev, flags);
 }
 
@@ -101,6 +102,7 @@ static zx_status_t platform_bus_bus_device_add(void* ctx, uint32_t vid, uint32_t
     device_add_args_t add_args = {
         .version = DEVICE_ADD_ARGS_VERSION,
         .name = namestr,
+        .ctx = bus, //????
         .ops = &empty_bus_proto,
         .proto_id = ZX_PROTOCOL_PLATFORM_BUS,
         .proto_ops = &platform_bus_proto_ops,
@@ -109,7 +111,7 @@ static zx_status_t platform_bus_bus_device_add(void* ctx, uint32_t vid, uint32_t
     };
 
     completion_reset(&bus->register_protocols_completion);
-    zx_status_t status = device_add(bus->parent, &add_args, &bus->zxdev);
+    zx_status_t status = device_add(bus->zxdev, &add_args, &bus->zxdev);
     if (status != ZX_OK) {
         return status;
     }
@@ -179,6 +181,7 @@ static zx_status_t platform_bus_create(void* ctx, zx_device_t* parent, const cha
     if (!bus) {
         return  ZX_ERR_NO_MEMORY;
     }
+printf("platform_bus_create %p\n", bus); 
 
     char* board_name = strstr(args, "board=");
     if (board_name) {
@@ -203,7 +206,6 @@ static zx_status_t platform_bus_create(void* ctx, zx_device_t* parent, const cha
     if (status != ZX_OK) {
         return status;
     }
-    bus->parent = parent;
 
     // Then we attach the platform-bus device below it
     bus->resource = get_root_resource();

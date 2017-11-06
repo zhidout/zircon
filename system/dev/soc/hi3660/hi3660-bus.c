@@ -117,6 +117,11 @@ printf("hi3660_bind\n");
         goto fail;
     }
 
+    if ((status = hi3360_add_gpios(bus)) != ZX_OK) {
+        zxlogf(ERROR, "hi3660_bind: hi3360_add_gpios failed!\n");;
+        goto fail;
+    }
+
     device_add_args_t args = {
         .version = DEVICE_ADD_ARGS_VERSION,
         .name = "hi3660-bus",
@@ -143,13 +148,8 @@ printf("hi3660_bind\n");
         },
     };
 
-printf("hi3660_bind pbus_register_protocols\n");
     if ((status = pbus_register_protocols(&bus->pbus,  protocols, countof(protocols))) != ZX_OK) {
         zxlogf(ERROR, "hi3660_bind: pbus_register_protocols failed!\n");;
-    }
-
-    if ((status = hi3360_add_gpios(bus)) != ZX_OK) {
-        zxlogf(ERROR, "hi3660_bind: hi3360_add_gpios failed!\n");;
     }
 
     if ((status = hi3360_add_devices(bus)) != ZX_OK) {

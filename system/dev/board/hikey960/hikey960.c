@@ -114,6 +114,25 @@ static zx_protocol_device_t hikey_device_protocol = {
     .release = hikey_release,
 };
 
+static int hikey_start_thread(void* arg) {
+    hikey960_bus_t* bus = arg;
+
+    // load SOC driver
+    zx_status_t status = pbus_bus_device_add(&bus->pbus, PDEV_VID_HI_SILICON, PDEV_PID_HI3660, 0);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "hikey_bind could not add hi3660 driver: %d\n", status);
+    }
+
+#if GPIO_TEST
+    // add GPIO test driver
+    status = pbus_device_add(&bus->pbus, &gpio_test_dev, 0);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "hikey_bind could not add gpio_test_dev: %d\n", status);
+    }
+#endif
+    return 0;
+}
+
 static zx_status_t hikey_bind(void* ctx, zx_device_t* parent, void** cookie) {
     hikey960_bus_t* bus = calloc(1, sizeof(hikey960_bus_t));
     if (!bus) {
@@ -152,19 +171,9 @@ static zx_status_t hikey_bind(void* ctx, zx_device_t* parent, void** cookie) {
         zxlogf(ERROR, "hikey_bind: pbus_register_protocols failed!\n");;
     }
 
-    // load SOC driver
-    status = pbus_bus_device_add(&bus->pbus, PDEV_VID_HI_SILICON, PDEV_PID_HI3660, 0);
-    if (status != ZX_OK) {
-        zxlogf(ERROR, "hikey_bind could not add hi3660 driver: %d\n", status);
-    }
-
-#if GPIO_TEST
-    // add GPIO test driver
-    status = pbus_device_add(&bus->pbus, &gpio_test_dev, 0);
-    if (status != ZX_OK) {
-        zxlogf(ERROR, "hikey_bind could not add gpio_test_dev: %d\n", status);
-    }
-#endif
+    thrd_t thread;
+    thrd_create_with_name(&thread, hikey_start_thread, bus, "hikey_start_thread");
+    thrd_detach(thread);
 
     return ZX_OK;
 
