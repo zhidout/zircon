@@ -12,12 +12,13 @@
 #include <ddk/protocol/platform-bus.h>
 #include <ddk/protocol/platform-device.h>
 #include <ddk/protocol/usb-mode-switch.h>
+#include <sync/completion.h>
 #include <zircon/types.h>
 
 // context structure for the platform bus
 typedef struct {
     zx_device_t* zxdev;
-    pbus_interface_t interface;
+    zx_device_t* parent;
     usb_mode_switch_protocol_t ums;
     gpio_protocol_t gpio;
     i2c_protocol_t i2c;
@@ -27,6 +28,9 @@ typedef struct {
 
     list_node_t devices;    // list of platform_dev_t
     char board_name[ZX_DEVICE_NAME_MAX + 1];
+
+    // completion used to wait for platform bus drivers to register their protocols
+    completion_t register_protocols_completion;
 
     // list of i2c_txn_t
     list_node_t i2c_txns;
@@ -39,6 +43,7 @@ typedef struct {
     platform_bus_t* bus;
     list_node_t node;
     char name[ZX_DEVICE_NAME_MAX + 1];
+    completion_t register_protocols_completion;
     uint32_t vid;
     uint32_t pid;
     uint32_t did;

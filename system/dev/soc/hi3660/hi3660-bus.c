@@ -15,6 +15,7 @@
 #include <ddk/device.h>
 #include <ddk/driver.h>
 #include <ddk/protocol/platform-defs.h>
+#include <ddk/protocol/usb-mode-switch.h>
 
 #include <zircon/process.h>
 #include <zircon/syscalls.h>
@@ -89,27 +90,6 @@ usb_mode_switch_protocol_ops_t usb_mode_switch_ops = {
     .set_mode = hi3660_set_mode,
 };
 
-static zx_status_t hi3660_get_protocol(void* ctx, uint32_t proto_id, void* out) {
-    hi3660_bus_t* bus = ctx;
-
-    switch (proto_id) {
-    case ZX_PROTOCOL_GPIO: {
-        memcpy(out, &bus->gpio, sizeof(bus->gpio));
-        return ZX_OK;
-    }
-    case ZX_PROTOCOL_USB_MODE_SWITCH: {
-        memcpy(out, &bus->usb_mode_switch, sizeof(bus->usb_mode_switch));
-        return ZX_OK;
-    }
-    default:
-        return ZX_ERR_NOT_SUPPORTED;
-    }
-}
-
-static pbus_interface_ops_t hi3660_bus_ops = {
-    .get_protocol = hi3660_get_protocol,
-};
-
 static void hi3660_release(void* ctx) {
     hi3660_bus_t* bus = ctx;
     pl061_gpios_t* gpios;
@@ -175,13 +155,23 @@ static zx_status_t hi3660_bind(void* ctx, zx_device_t* parent, void** cookie) {
 
     bus->gpio.ops = &gpio_ops;
     bus->gpio.ctx = bus;
-    bus->usb_mode_switch.ops = &usb_mode_switch_ops;
-    bus->usb_mode_switch.ctx = bus;
 
-    pbus_interface_t intf;
-    intf.ops = &hi3660_bus_ops;
-    intf.ctx = bus;
-    pbus_set_interface(&bus->pbus, &intf);
+    const pbus_protocol_t protocols[] = {
+        {
+            .proto_id = ZX_PROTOCOL_USB_MODE_SWITCH,
+            .ctx = bus,
+            .ops = &usb_mode_switch_ops,
+        },
+        {
+            .proto_id = ZX_PROTOCOL_GPIO,
+            .ctx = bus->gpio.ctx,
+            .ops = bus->gpio.ops,
+        },
+    };
+
+    if ((status = pbus_register_protocols(&bus->pbus,  protocols, countof(protocols))) != ZX_OK) {
+        zxlogf(ERROR, "hi3660_bind: pbus_register_protocols failed!\n");;
+    }
 
     if ((status = hi3360_add_gpios(bus)) != ZX_OK) {
         zxlogf(ERROR, "hi3660_bind: hi3360_add_gpios failed!\n");;

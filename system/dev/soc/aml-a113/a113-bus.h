@@ -14,7 +14,6 @@
 
 typedef struct {
     platform_bus_protocol_t pbus;
-    usb_mode_switch_protocol_t usb_mode_switch;
     gpio_protocol_t gpio;
     i2c_protocol_t i2c;
     io_buffer_t usb_phy;

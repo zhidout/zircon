@@ -17,16 +17,33 @@
 
 #include "platform-bus.h"
 
-zx_status_t platform_bus_set_interface(void* ctx, pbus_interface_t* interface) {
-    if (!interface) {
-        return ZX_ERR_INVALID_ARGS;
-    }
+zx_status_t platform_bus_register_protocols(void* ctx, const pbus_protocol_t* protocols,
+                                            size_t count) {
     platform_bus_t* bus = ctx;
-    memcpy(&bus->interface, interface, sizeof(bus->interface));
 
-    pbus_interface_get_protocol(&bus->interface, ZX_PROTOCOL_USB_MODE_SWITCH, &bus->ums);
-    pbus_interface_get_protocol(&bus->interface, ZX_PROTOCOL_GPIO, &bus->gpio);
-    pbus_interface_get_protocol(&bus->interface, ZX_PROTOCOL_I2C, &bus->i2c);
+    for (size_t i = 0; i < count; i++) {
+        const pbus_protocol_t* proto = &protocols[i];
+        switch (proto->proto_id) {
+        case ZX_PROTOCOL_USB_MODE_SWITCH:
+            bus->ums.ctx = proto->ctx;
+            bus->ums.ops = proto->ops;
+            break;
+        case ZX_PROTOCOL_GPIO:
+            bus->gpio.ctx = proto->ctx;
+            bus->gpio.ops = proto->ops;
+            break;
+        case ZX_PROTOCOL_I2C:
+            bus->i2c.ctx = proto->ctx;
+            bus->i2c.ops = proto->ops;
+            break;
+        default:
+            zxlogf(INFO, "unsupported protocol %08X in platform_bus_set_protocols\n", proto->proto_id);
+            break;
+        }
+    }
+
+    // signal that the platform bus driver has registered its protocols
+    completion_signal(&bus->register_protocols_completion);
 
     return ZX_OK;
 }
@@ -49,17 +66,61 @@ static zx_status_t platform_bus_device_enable(void* ctx, uint32_t vid, uint32_t 
     return ZX_ERR_NOT_FOUND;
 }
 
+static zx_protocol_device_t empty_bus_proto = {
+    .version = DEVICE_OPS_VERSION,
+};
+
+static zx_status_t platform_bus_bus_device_add(void* ctx, uint32_t vid, uint32_t pid, uint32_t did);
+
 static const char* platform_bus_get_board_name(void* ctx) {
     platform_bus_t* bus = ctx;
     return bus->board_name;
 }
 
 static platform_bus_protocol_ops_t platform_bus_proto_ops = {
-    .set_interface = platform_bus_set_interface,
+    .register_protocols = platform_bus_register_protocols,
     .device_add = platform_bus_device_add,
     .device_enable = platform_bus_device_enable,
+    .bus_device_add = platform_bus_bus_device_add,
     .get_board_name = platform_bus_get_board_name,
 };
+
+static zx_status_t platform_bus_bus_device_add(void* ctx, uint32_t vid, uint32_t pid,
+                                               uint32_t did) {
+    platform_bus_t* bus = ctx;
+
+    zx_device_prop_t props[] = {
+        {BIND_PLATFORM_DEV_VID, 0, vid},
+        {BIND_PLATFORM_DEV_PID, 0, pid},
+        {BIND_PLATFORM_DEV_DID, 0, pid},
+    };
+
+    char namestr[ZX_DEVICE_NAME_MAX];
+    snprintf(namestr, sizeof(namestr), "%04x:%04x:%04x", vid, pid, did);
+
+    device_add_args_t add_args = {
+        .version = DEVICE_ADD_ARGS_VERSION,
+        .name = namestr,
+        .ops = &empty_bus_proto,
+        .proto_id = ZX_PROTOCOL_PLATFORM_BUS,
+        .proto_ops = &platform_bus_proto_ops,
+        .props = props,
+        .prop_count = countof(props),
+    };
+
+    completion_reset(&bus->register_protocols_completion);
+    zx_status_t status = device_add(bus->parent, &add_args, &bus->zxdev);
+    if (status != ZX_OK) {
+        return status;
+    }
+    status = completion_wait(&bus->register_protocols_completion, ZX_SEC(5));
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "pbus_bus_device_add: platform bus driver didn't "
+                      "call pbus_register_protocols\n");
+        device_remove(bus->zxdev);
+    }
+    return status;
+}
 
 static void platform_bus_release(void* ctx) {
     platform_bus_t* bus = ctx;
@@ -138,10 +199,11 @@ static zx_status_t platform_bus_create(void* ctx, zx_device_t* parent, const cha
         .flags = DEVICE_ADD_NON_BINDABLE,
     };
 
-    zx_status_t r = device_add(parent, &self_args, &parent);
-    if (r != ZX_OK) {
-        return r;
+    zx_status_t status = device_add(parent, &self_args, &parent);
+    if (status != ZX_OK) {
+        return status;
     }
+    bus->parent = parent;
 
     // Then we attach the platform-bus device below it
     bus->resource = get_root_resource();
@@ -156,9 +218,12 @@ static zx_status_t platform_bus_create(void* ctx, zx_device_t* parent, const cha
         {BIND_PLATFORM_DEV_PID, 0, bus->pid},
     };
 
+    char namestr[ZX_DEVICE_NAME_MAX];
+    snprintf(namestr, sizeof(namestr), "%04x:%04x", vid, pid);
+
     device_add_args_t add_args = {
         .version = DEVICE_ADD_ARGS_VERSION,
-        .name = "platform",
+        .name = namestr,
         .ctx = bus,
         .ops = &platform_bus_proto,
         .proto_id = ZX_PROTOCOL_PLATFORM_BUS,
@@ -167,7 +232,7 @@ static zx_status_t platform_bus_create(void* ctx, zx_device_t* parent, const cha
         .prop_count = countof(props),
     };
 
-   return device_add(parent, &add_args, &bus->zxdev);
+    return device_add(parent, &add_args, &bus->zxdev);
 }
 
 static zx_driver_ops_t platform_bus_driver_ops = {

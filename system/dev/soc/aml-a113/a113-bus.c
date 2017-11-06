@@ -41,28 +41,6 @@ usb_mode_switch_protocol_ops_t usb_mode_switch_ops = {
     .set_mode = a113_set_mode,
 };
 
-static zx_status_t a113_bus_get_protocol(void* ctx, uint32_t proto_id, void* out) {
-    a113_bus_t* bus = ctx;
-
-    switch (proto_id) {
-    case ZX_PROTOCOL_USB_MODE_SWITCH:
-        memcpy(out, &bus->usb_mode_switch, sizeof(bus->usb_mode_switch));
-        return ZX_OK;
-    case ZX_PROTOCOL_GPIO:
-        memcpy(out, &bus->gpio, sizeof(bus->gpio));
-        return ZX_OK;
-    case ZX_PROTOCOL_I2C:
-        memcpy(out, &bus->i2c, sizeof(bus->i2c));
-        return ZX_OK;
-    default:
-        return ZX_ERR_NOT_SUPPORTED;
-    }
-}
-
-static pbus_interface_ops_t a113_bus_bus_ops = {
-    .get_protocol = a113_bus_get_protocol,
-};
-
 static void a113_bus_release(void* ctx) {
     a113_bus_t* bus = ctx;
 
@@ -104,9 +82,6 @@ static zx_status_t a113_bus_bind(void* ctx, zx_device_t* parent, void** cookie) 
     a113_pinmux_config(bus, I2C_SCK_B, 1);
     a113_pinmux_config(bus, I2C_SDA_B, 1);
 
-    bus->usb_mode_switch.ops = &usb_mode_switch_ops;
-    bus->usb_mode_switch.ctx = bus;
-
     device_add_args_t args = {
         .version = DEVICE_ADD_ARGS_VERSION,
         .name = "a113-bus",
@@ -120,11 +95,27 @@ static zx_status_t a113_bus_bind(void* ctx, zx_device_t* parent, void** cookie) 
         goto fail;
     }
 
-    pbus_interface_t intf;
-    intf.ops = &a113_bus_bus_ops;
-    intf.ctx = bus;
-    pbus_set_interface(&bus->pbus, &intf);
+    const pbus_protocol_t protocols[] = {
+        {
+            .proto_id = ZX_PROTOCOL_USB_MODE_SWITCH,
+            .ctx = bus,
+            .ops = &usb_mode_switch_ops,
+        },
+        {
+            .proto_id = ZX_PROTOCOL_GPIO,
+            .ctx = bus->gpio.ctx,
+            .ops = bus->gpio.ops,
+        },
+        {
+            .proto_id = ZX_PROTOCOL_I2C,
+            .ctx = bus->i2c.ctx,
+            .ops = bus->i2c.ops,
+        },
+    };
 
+    if ((status = pbus_register_protocols(&bus->pbus, protocols, countof(protocols))) != ZX_OK) {
+        zxlogf(ERROR, "pbus_register_protocols failed: %d\n", status);
+    }
     if ((status = a113_usb_init(bus)) != ZX_OK) {
         zxlogf(ERROR, "a113_bus_bind failed: %d\n", status);
     }

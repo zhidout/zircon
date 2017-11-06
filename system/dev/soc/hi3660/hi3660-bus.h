@@ -8,14 +8,12 @@
 #include <ddk/protocol/gpio.h>
 #include <ddk/protocol/platform-bus.h>
 #include <zircon/device/usb-device.h>
-#include <ddk/protocol/usb-mode-switch.h>
 #include <zircon/listnode.h>
 
 typedef struct {
     list_node_t gpios;
     platform_bus_protocol_t pbus;
     gpio_protocol_t gpio;
-    usb_mode_switch_protocol_t usb_mode_switch;
     io_buffer_t usb3otg_bc;
     io_buffer_t peri_crg;
     io_buffer_t pctrl;

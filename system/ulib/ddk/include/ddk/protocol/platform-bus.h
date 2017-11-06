@@ -42,31 +42,23 @@ typedef struct {
     uint32_t i2c_channel_count;
 } pbus_dev_t;
 
+typedef struct {
+    uint32_t proto_id;
+    void* ctx;
+    void* ops;
+} pbus_protocol_t;
+
 // flags for pbus_device_add()
 enum {
     // Add the device but to not publish it to the devmgr until enabled with pbus_device_enable().
     PDEV_ADD_DISABLED = (1 << 0),
 };
 
-// interface registered by the platform bus implementation driver
 typedef struct {
-    zx_status_t (*get_protocol)(void* ctx, uint32_t proto_id, void* out);
-} pbus_interface_ops_t;
-
-typedef struct {
-    pbus_interface_ops_t* ops;
-    void* ctx;
-} pbus_interface_t;
-
-static inline zx_status_t pbus_interface_get_protocol(pbus_interface_t* intf, uint32_t proto_id,
-                                                      void* out) {
-    return intf->ops->get_protocol(intf->ctx, proto_id, out);
-}
-
-typedef struct {
-    zx_status_t (*set_interface)(void* ctx, pbus_interface_t* interface);
+    zx_status_t (*register_protocols)(void* ctx, const pbus_protocol_t* protocols, size_t count);
     zx_status_t (*device_add)(void* ctx, const pbus_dev_t* dev, uint32_t flags);
     zx_status_t (*device_enable)(void* ctx, uint32_t vid, uint32_t pid, uint32_t did, bool enable);
+    zx_status_t (*bus_device_add)(void* ctx, uint32_t vid, uint32_t pid, uint32_t did);
     const char* (*get_board_name)(void* ctx);
 } platform_bus_protocol_ops_t;
 
@@ -75,9 +67,13 @@ typedef struct {
     void* ctx;
 } platform_bus_protocol_t;
 
-static inline zx_status_t pbus_set_interface(platform_bus_protocol_t* pbus,
-                                             pbus_interface_t* interface) {
-    return pbus->ops->set_interface(pbus->ctx, interface);
+// Registers the protocols that a platform bus driver implements with the platform bus.
+// The "count" is number of protocols being registered and ctxs[i] and ops[i] are the ith
+// ctx and ops pointer for the ith protocol.
+// Every driver that binds to ZX_PROTOCOL_PLATFORM_BUS must call this in their device bind hook.
+static inline zx_status_t pbus_register_protocols(platform_bus_protocol_t* pbus,
+                                                  const pbus_protocol_t* protocols, size_t count) {
+    return pbus->ops->register_protocols(pbus->ctx, protocols, count);
 }
 
 static inline zx_status_t pbus_device_add(platform_bus_protocol_t* pbus, const pbus_dev_t* dev,
@@ -90,6 +86,11 @@ static inline zx_status_t pbus_device_add(platform_bus_protocol_t* pbus, const p
 static inline zx_status_t pbus_device_enable(platform_bus_protocol_t* pbus, uint32_t vid,
                                              uint32_t pid, uint32_t did, bool enable) {
     return pbus->ops->device_enable(pbus->ctx, vid, pid, did, enable);
+}
+
+static inline zx_status_t pbus_bus_device_add(platform_bus_protocol_t* pbus, uint32_t vid, uint32_t pid,
+                                          uint32_t did) {
+    return pbus->ops->bus_device_add(pbus->ctx, vid, pid, did);
 }
 
 static inline const char* pbus_get_board_name(platform_bus_protocol_t* pbus) {

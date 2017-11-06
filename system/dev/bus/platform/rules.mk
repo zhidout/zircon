@@ -14,9 +14,9 @@ MODULE_SRCS := \
     $(LOCAL_DIR)/platform-bus.c \
     $(LOCAL_DIR)/platform-device.c \
 
-MODULE_STATIC_LIBS := system/ulib/ddk
+MODULE_STATIC_LIBS := system/ulib/sync system/ulib/ddk
 
-MODULE_LIBS := system/ulib/mdi system/ulib/driver system/ulib/zircon system/ulib/c
+MODULE_LIBS := system/ulib/driver system/ulib/zircon system/ulib/c
 
 include make/module.mk
 
@@ -31,6 +31,6 @@ MODULE_SRCS := \
 
 MODULE_STATIC_LIBS := system/ulib/ddk
 
-MODULE_LIBS := system/ulib/mdi system/ulib/driver system/ulib/zircon system/ulib/c
+MODULE_LIBS := system/ulib/driver system/ulib/zircon system/ulib/c
 
 include make/module.mk
