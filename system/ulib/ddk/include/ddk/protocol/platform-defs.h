@@ -25,7 +25,6 @@ __BEGIN_CDECLS;
 // HiSilicon
 #define PDEV_VID_HI_SILICON         2
 #define PDEV_PID_HI3660             1
-#define PDEV_DID_HI3660_GPIO_TEST   1
 
 // Amlogic
 #define PDEV_VID_AMLOGIC            3
@@ -35,5 +34,11 @@ __BEGIN_CDECLS;
 #define PDEV_DID_AMLOGIC_GAUSS_AUDIO 1
 // I2C test driver
 #define PDEV_DID_GAUSS_I2C_TEST     2
+
+// 96Boards
+#define PDEV_VID_96BOARDS           4
+#define PDEV_PID_HIKEY960           1
+#define PDEV_DID_HIKEY960_GPIO_TEST 1
+
 
 __END_CDECLS;

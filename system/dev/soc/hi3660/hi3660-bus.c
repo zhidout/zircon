@@ -15,7 +15,6 @@
 #include <ddk/device.h>
 #include <ddk/driver.h>
 #include <ddk/protocol/platform-defs.h>
-#include <ddk/protocol/usb-mode-switch.h>
 
 #include <zircon/process.h>
 #include <zircon/syscalls.h>
@@ -70,26 +69,6 @@ static gpio_protocol_ops_t gpio_ops = {
     .write = hi3660_gpio_write,
 };
 
-static zx_status_t hi3660_get_initial_mode(void* ctx, usb_mode_t* out_mode) {
-    *out_mode = USB_MODE_HOST;
-    return ZX_OK;
-}
-
-static zx_status_t hi3660_set_mode(void* ctx, usb_mode_t mode) {
-    hi3660_bus_t* bus = ctx;
-
-    if (mode == USB_MODE_OTG) {
-        return ZX_ERR_NOT_SUPPORTED;
-    }
-
-    return hi3660_usb_set_mode(bus, mode);
-}
-
-usb_mode_switch_protocol_ops_t usb_mode_switch_ops = {
-    .get_initial_mode = hi3660_get_initial_mode,
-    .set_mode = hi3660_set_mode,
-};
-
 static void hi3660_release(void* ctx) {
     hi3660_bus_t* bus = ctx;
     pl061_gpios_t* gpios;
@@ -112,6 +91,7 @@ static zx_protocol_device_t hi3660_device_protocol = {
 };
 
 static zx_status_t hi3660_bind(void* ctx, zx_device_t* parent, void** cookie) {
+printf("hi3660_bind\n");
     hi3660_bus_t* bus = calloc(1, sizeof(hi3660_bus_t));
     if (!bus) {
         return ZX_ERR_NO_MEMORY;
@@ -123,7 +103,6 @@ static zx_status_t hi3660_bind(void* ctx, zx_device_t* parent, void** cookie) {
     }
 
     list_initialize(&bus->gpios);
-    bus->usb_mode = USB_MODE_NONE;
 
     // TODO(voydanoff) get from platform bus driver somehow
     zx_handle_t resource = get_root_resource();
@@ -158,17 +137,13 @@ static zx_status_t hi3660_bind(void* ctx, zx_device_t* parent, void** cookie) {
 
     const pbus_protocol_t protocols[] = {
         {
-            .proto_id = ZX_PROTOCOL_USB_MODE_SWITCH,
-            .ctx = bus,
-            .ops = &usb_mode_switch_ops,
-        },
-        {
             .proto_id = ZX_PROTOCOL_GPIO,
             .ctx = bus->gpio.ctx,
             .ops = bus->gpio.ops,
         },
     };
 
+printf("hi3660_bind pbus_register_protocols\n");
     if ((status = pbus_register_protocols(&bus->pbus,  protocols, countof(protocols))) != ZX_OK) {
         zxlogf(ERROR, "hi3660_bind: pbus_register_protocols failed!\n");;
     }
@@ -181,11 +156,9 @@ static zx_status_t hi3660_bind(void* ctx, zx_device_t* parent, void** cookie) {
         zxlogf(ERROR, "hi3660_bind: hi3360_add_devices failed!\n");;
     }
 
-    // must be after pbus_set_interface
     if ((status = hi3360_usb_init(bus)) != ZX_OK) {
         zxlogf(ERROR, "hi3660_bind: hi3360_usb_init failed!\n");;
     }
-    hi3660_usb_set_mode(bus, USB_MODE_NONE);
 
     return ZX_OK;
 

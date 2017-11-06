@@ -17,7 +17,6 @@ typedef struct {
     io_buffer_t usb3otg_bc;
     io_buffer_t peri_crg;
     io_buffer_t pctrl;
-    usb_mode_t usb_mode;
 } hi3660_bus_t;
 
 // hi3660-devices.c
@@ -28,4 +27,3 @@ zx_status_t hi3360_add_gpios(hi3660_bus_t* bus);
 
 // hi3660-usb.c
 zx_status_t hi3360_usb_init(hi3660_bus_t* bus);
-zx_status_t hi3660_usb_set_mode(hi3660_bus_t* bus, usb_mode_t mode);

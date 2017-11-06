@@ -2,15 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <ddk/driver.h>
-#include <ddk/protocol/gpio.h>
-#include <ddk/protocol/platform-defs.h>
 #include <hw/reg.h>
-#include <stdio.h>
+#include <zircon/types.h>
 
 #include "hi3660-bus.h"
 #include "hi3660-regs.h"
-#include "hikey960-hw.h"
 
 zx_status_t hi3360_usb_init(hi3660_bus_t* bus) {
     volatile void* usb3otg_bc = io_buffer_virt(&bus->usb3otg_bc);
@@ -56,27 +52,5 @@ zx_status_t hi3360_usb_init(hi3660_bus_t* bus) {
     writel(temp, usb3otg_bc + USB3OTG_CTRL3);
     zx_nanosleep(zx_deadline_after(ZX_USEC(100)));
 
-    return ZX_OK;
-}
-
-zx_status_t hi3660_usb_set_mode(hi3660_bus_t* bus, usb_mode_t mode) {
-    if (mode == bus->usb_mode) {
-        return ZX_OK;
-    }
-
-    gpio_protocol_t* gpio = &bus->gpio;
-    gpio_config(gpio, GPIO_HUB_VDD33_EN, GPIO_DIR_OUT);
-    gpio_config(gpio, GPIO_VBUS_TYPEC, GPIO_DIR_OUT);
-    gpio_config(gpio, GPIO_USBSW_SW_SEL, GPIO_DIR_OUT);
-
-    gpio_write(gpio, GPIO_HUB_VDD33_EN, mode == USB_MODE_HOST);
-    gpio_write(gpio, GPIO_VBUS_TYPEC, mode == USB_MODE_HOST);
-    gpio_write(gpio, GPIO_USBSW_SW_SEL, mode == USB_MODE_HOST);
-
-    // add or remove XHCI device
-    pbus_device_enable(&bus->pbus, PDEV_VID_GENERIC, PDEV_PID_GENERIC, PDEV_DID_USB_XHCI,
-                       mode == USB_MODE_HOST);
-
-    bus->usb_mode = mode;
     return ZX_OK;
 }
