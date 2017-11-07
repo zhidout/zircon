@@ -48,10 +48,12 @@ typedef struct {
     pbus_irq_t* irqs;
     pbus_gpio_t* gpios;
     pbus_i2c_channel_t* i2c_channels;
+    pbus_resource_t* resources;
     uint32_t mmio_count;
     uint32_t irq_count;
     uint32_t gpio_count;
     uint32_t i2c_channel_count;
+    uint32_t resource_count;
 } platform_dev_t;
 
 typedef struct {

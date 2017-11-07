@@ -10,6 +10,8 @@
 #include <ddk/protocol/i2c.h>
 #include <ddk/protocol/usb-mode-switch.h>
 
+#include "platform-bus.h"
+
 // maximum transfer size we can proxy.
 #define PDEV_I2C_MAX_TRANSFER_SIZE 4096
 
@@ -18,6 +20,7 @@ enum {
     // ZX_PROTOCOL_PLATFORM_DEV
     PDEV_GET_MMIO = 1,
     PDEV_GET_INTERRUPT,
+    PDEV_GET_RESOURCE,
 
     // ZX_PROTOCOL_USB_MODE_SWITCH
     PDEV_UMS_GET_INITIAL_MODE,
@@ -68,6 +71,7 @@ typedef struct {
         gpio_config_flags_t gpio_flags;
         uint8_t gpio_value;
         pdev_i2c_req_t i2c;
+        pbus_resource_t resource;
     };
 } pdev_req_t;
 

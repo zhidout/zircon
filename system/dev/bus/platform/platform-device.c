@@ -66,13 +66,37 @@ static zx_status_t platform_dev_get_interrupt(platform_dev_t* dev, uint32_t inde
         return ZX_ERR_INVALID_ARGS;
     }
     pbus_irq_t* irq = &dev->irqs[index];
-    zx_status_t status = zx_interrupt_create(dev->bus->resource, irq->irq, ZX_INTERRUPT_REMAP_IRQ, out_handle);
+    zx_status_t status = zx_interrupt_create(dev->bus->resource, irq->irq, ZX_INTERRUPT_REMAP_IRQ,
+                                             out_handle);
     if (status != ZX_OK) {
         zxlogf(ERROR, "platform_dev_get_interrupt: zx_interrupt_create failed %d\n", status);
         return status;
     }
     *out_handle_count = 1;
     return ZX_OK;
+}
+
+static zx_status_t platform_dev_get_resource(platform_dev_t* dev, const pbus_resource_t* resource,
+                                             zx_handle_t* out_handle, uint32_t* out_handle_count) {
+    pbus_resource_t* resources = dev->resources;
+    uint32_t count = dev->resource_count;
+
+    for (uint32_t i = 0; i < count; i++) {
+        pbus_resource_t* test = &resources[i];
+        if (test->kind == resource->kind && test->low >= resource->low &&
+            test->high <= resource->high) {
+            zx_status_t status = zx_resource_create(dev->bus->resource, resource->kind,
+                                                    resource->low, resource->high, out_handle);
+            if (status != ZX_OK) {
+                zxlogf(ERROR, "platform_dev_get_resource: zx_resource_create failed %d\n", status);
+                return status;
+            }
+            *out_handle_count = 1;
+            return ZX_OK;
+        }
+    }
+
+    return ZX_ERR_ACCESS_DENIED;
 }
 
 static zx_status_t platform_dev_ums_get_initial_mode(platform_dev_t* dev, usb_mode_t* out_mode) {
@@ -252,6 +276,9 @@ static zx_status_t platform_dev_rxrpc(void* ctx, zx_handle_t channel) {
     case PDEV_GET_INTERRUPT:
         resp.status = platform_dev_get_interrupt(dev, req->index, &handle, &handle_count);
         break;
+    case PDEV_GET_RESOURCE:
+        resp.status = platform_dev_get_resource(dev, &req->resource, &handle, &handle_count);
+        break;
     case PDEV_UMS_GET_INITIAL_MODE:
         resp.status = platform_dev_ums_get_initial_mode(dev, &resp.usb_mode);
         break;
@@ -303,6 +330,7 @@ void platform_dev_free(platform_dev_t* dev) {
     free(dev->irqs);
     free(dev->gpios);
     free(dev->i2c_channels);
+    free(dev->resources);
     free(dev);
 }
 
@@ -363,6 +391,16 @@ zx_status_t platform_device_add(platform_bus_t* bus, const pbus_dev_t* pdev, uin
         }
         memcpy(dev->i2c_channels, pdev->i2c_channels, size);
         dev->i2c_channel_count = pdev->i2c_channel_count;
+    }
+    if (pdev->resource_count) {
+        size_t size = pdev->resource_count * sizeof(*pdev->resources);
+        dev->resources = malloc(size);
+        if (!dev->resources) {
+            status = ZX_ERR_NO_MEMORY;
+            goto fail;
+        }
+        memcpy(dev->resources, pdev->resources, size);
+        dev->resource_count = pdev->resource_count;
     }
 
     dev->bus = bus;
