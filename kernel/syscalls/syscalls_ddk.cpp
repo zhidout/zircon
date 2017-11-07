@@ -122,9 +122,8 @@ zx_status_t sys_vmo_create_contiguous(zx_handle_t hrsrc, size_t size,
             alignment_log2 >= (8 * sizeof(uint64_t)))
         return ZX_ERR_INVALID_ARGS;
 
-    // TODO(ZX-971): finer grained validation
     zx_status_t status;
-    if ((status = validate_resource(hrsrc, ZX_RSRC_KIND_ROOT)) < 0) {
+    if ((status = validate_resource(hrsrc, ZX_RSRC_ALLOC_CONTIG_VMO)) < 0) {
         return status;
     }
 
@@ -225,10 +224,10 @@ zx_status_t sys_bootloader_fb_get_info(user_out_ptr<uint32_t> format, user_out_p
 #endif
 }
 
-zx_status_t sys_set_framebuffer(zx_handle_t hrsrc, user_inout_ptr<void> vaddr, uint32_t len, uint32_t format, uint32_t width, uint32_t height, uint32_t stride) {
-    // TODO(ZX-971): finer grained validation
+zx_status_t sys_set_framebuffer(zx_handle_t hrsrc, user_inout_ptr<void> vaddr, uint32_t len,
+                                uint32_t format, uint32_t width, uint32_t height, uint32_t stride) {
     zx_status_t status;
-    if ((status = validate_resource(hrsrc, ZX_RSRC_KIND_ROOT)) < 0) {
+    if ((status = validate_resource(hrsrc, ZX_RSRC_SET_FRAMEBUFFER)) < 0) {
         return status;
     }
 
@@ -247,9 +246,11 @@ zx_status_t sys_set_framebuffer(zx_handle_t hrsrc, user_inout_ptr<void> vaddr, u
     return ZX_OK;
 }
 
-zx_status_t sys_set_framebuffer_vmo(zx_handle_t hrsrc, zx_handle_t vmo_handle, uint32_t len, uint32_t format, uint32_t width, uint32_t height, uint32_t stride) {
+zx_status_t sys_set_framebuffer_vmo(zx_handle_t hrsrc, zx_handle_t vmo_handle, uint32_t len,
+                                    uint32_t format, uint32_t width, uint32_t height,
+                                    uint32_t stride) {
     zx_status_t status;
-    if ((status = validate_resource(hrsrc, ZX_RSRC_KIND_ROOT)) < 0)
+    if ((status = validate_resource(hrsrc, ZX_RSRC_SET_FRAMEBUFFER)) < 0)
         return status;
 
     auto up = ProcessDispatcher::GetCurrent();
@@ -281,9 +282,8 @@ zx_status_t sys_set_framebuffer_vmo(zx_handle_t hrsrc, zx_handle_t vmo_handle, u
 #include <arch/x86/ioport.h>
 
 zx_status_t sys_mmap_device_io(zx_handle_t hrsrc, uint32_t io_addr, uint32_t len) {
-    // TODO(ZX-971): finer grained validation
     zx_status_t status;
-    if ((status = validate_resource(hrsrc, ZX_RSRC_KIND_ROOT)) < 0) {
+    if ((status = validate_resource_device_io(hrsrc, io_addr, len)) < 0) {
         return status;
     }
 
@@ -299,9 +299,8 @@ zx_status_t sys_mmap_device_io(zx_handle_t hrsrc, uint32_t io_addr, uint32_t len
 #endif
 
 uint64_t sys_acpi_uefi_rsdp(zx_handle_t hrsrc) {
-    // TODO(ZX-971): finer grained validation
     zx_status_t status;
-    if ((status = validate_resource(hrsrc, ZX_RSRC_KIND_ROOT)) < 0) {
+    if ((status = validate_resource(hrsrc, ZX_RSRC_ACPI_UEFI_RDSP)) < 0) {
         return status;
     }
 #if ARCH_X86

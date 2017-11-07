@@ -37,3 +37,14 @@ static inline zx_status_t validate_resource_irq(zx_handle_t handle,
                                                 uint32_t irq) {
     return validate_ranged_resource(handle, ZX_RSRC_KIND_IRQ, irq, irq);
 }
+
+// Validates mapping a device IO range based on a resource handle
+static inline zx_status_t validate_resource_device_io(
+    zx_handle_t handle, uint32_t io_addr, uint32_t length) {
+    uint64_t base = io_addr;
+    if (length < 1 || UINT64_MAX - base < length) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    return validate_ranged_resource(handle, ZX_RSRC_KIND_DEVICE_IO,
+                                    base, base + length - 1);
+}
