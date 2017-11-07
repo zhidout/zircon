@@ -500,8 +500,8 @@ static void dc_watch(zx_handle_t h) {
     }
 }
 
-static zx_status_t dc_launch_devhost(devhost_t* host,
-                                     const char* name, zx_handle_t hrpc) {
+static zx_status_t dc_launch_devhost(devhost_t* host, const char* name,
+                                     zx_handle_t hrpc, zx_handle_t hrsrc) {
     const char* devhost_bin = get_devhost_bin();
 
     launchpad_t* lp;
@@ -512,9 +512,10 @@ static zx_status_t dc_launch_devhost(devhost_t* host,
     launchpad_add_handle(lp, hrpc, PA_HND(PA_USER0, 0));
 
     zx_handle_t h;
-    //TODO: limit root resource to root devhost only
-    zx_handle_duplicate(get_root_resource(), ZX_RIGHT_SAME_RIGHTS, &h);
-    launchpad_add_handle(lp, h, PA_HND(PA_RESOURCE, 0));
+    if (hrsrc != ZX_HANDLE_INVALID) {
+        zx_handle_duplicate(hrsrc, ZX_RIGHT_SAME_RIGHTS, &h);
+        launchpad_add_handle(lp, h, PA_HND(PA_RESOURCE, 0));
+    }
 
     // Inherit devmgr's environment (including kernel cmdline)
     launchpad_clone(lp, LP_CLONE_ENVIRON);
@@ -555,7 +556,7 @@ static zx_status_t dc_launch_devhost(devhost_t* host,
     return ZX_OK;
 }
 
-static zx_status_t dc_new_devhost(const char* name, devhost_t** out) {
+static zx_status_t dc_new_devhost(const char* name, zx_handle_t hrsrc, devhost_t** out) {
     devhost_t* dh = calloc(1, sizeof(devhost_t));
     if (dh == NULL) {
         return ZX_ERR_NO_MEMORY;
@@ -568,7 +569,7 @@ static zx_status_t dc_new_devhost(const char* name, devhost_t** out) {
         return r;
     }
 
-    if ((r = dc_launch_devhost(dh, name, hrpc)) < 0) {
+    if ((r = dc_launch_devhost(dh, name, hrpc, hrsrc)) < 0) {
         zx_handle_close(dh->hrpc);
         free(dh);
         return r;
@@ -1269,7 +1270,7 @@ static zx_status_t dh_suspend(device_t* dev, uint32_t flags) {
     return zx_object_wait_one(rpc, ZX_CHANNEL_PEER_CLOSED, zx_deadline_after(ZX_SEC(5)), NULL);
 }
 
-static zx_status_t dc_prepare_proxy(device_t* dev) {
+static zx_status_t dc_prepare_proxy(device_t* dev, zx_handle_t hrsrc) {
     if (dev->flags & DEV_CTX_PROXY) {
         log(ERROR, "devcoord: cannot proxy a proxy: %s\n", dev->name);
         return ZX_ERR_INTERNAL;
@@ -1307,7 +1308,7 @@ static zx_status_t dc_prepare_proxy(device_t* dev) {
                 return r;
             }
         }
-        if ((r = dc_new_devhost(devhostname, &dev->proxy->host)) < 0) {
+        if ((r = dc_new_devhost(devhostname, hrsrc, &dev->proxy->host)) < 0) {
             log(ERROR, "devcoord: dh_new_devhost: %d\n", r);
             zx_handle_close(h0);
             zx_handle_close(h1);
@@ -1343,7 +1344,21 @@ static zx_status_t dc_attempt_bind(driver_t* drv, device_t* dev) {
     }
 
     zx_status_t r;
-    if ((r = dc_prepare_proxy(dev)) < 0) {
+    zx_handle_t hrsrc;
+
+#if defined(__x86_64__)
+    //TODO: limit root resource to root devhost only
+    hrsrc = get_root_resource();
+#else
+    // HACK: do not pass root resource to platform device devhosts
+    if (dev->parent && dev->parent->parent && dev->parent->parent == &sys_device) {
+        hrsrc = ZX_HANDLE_INVALID;
+    } else {
+        hrsrc = get_root_resource();
+    }
+#endif
+
+    if ((r = dc_prepare_proxy(dev, hrsrc)) < 0) {
         return r;
     }
 
@@ -1531,7 +1546,7 @@ void coordinator(void) {
 #else
     sys_device.libname = "/boot/driver/platform-bus.so";
 #endif
-    dc_prepare_proxy(&sys_device);
+    dc_prepare_proxy(&sys_device, get_root_resource());
 
     if (require_system) {
         printf("devcoord: full system required, ignoring fallback drivers\n");
