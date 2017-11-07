@@ -4,6 +4,7 @@
 
 #include <ddk/debug.h>
 #include <ddk/protocol/platform-defs.h>
+#include <zircon/syscalls/resource.h>
 #include <hw/reg.h>
 
 #include "a113-bus.h"
@@ -31,6 +32,12 @@ static const pbus_irq_t dwc3_irqs[] = {
     },
 };
 
+static const pbus_resource_t dwc3_resources[] = {
+    {
+        .kind = ZX_RSRC_ALLOC_CONTIG_VMO,
+    },
+};
+
 static const pbus_dev_t dwc3_dev = {
     .name = "dwc3",
     .vid = PDEV_VID_GENERIC,
@@ -40,6 +47,8 @@ static const pbus_dev_t dwc3_dev = {
     .mmio_count = countof(dwc3_mmios),
     .irqs = dwc3_irqs,
     .irq_count = countof(dwc3_irqs),
+    .resources = dwc3_resources,
+    .resource_count = countof(dwc3_resources),
 };
 
 static const pbus_dev_t xhci_dev = {

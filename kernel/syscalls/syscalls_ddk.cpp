@@ -124,6 +124,7 @@ zx_status_t sys_vmo_create_contiguous(zx_handle_t hrsrc, size_t size,
 
     zx_status_t status;
     if ((status = validate_resource(hrsrc, ZX_RSRC_ALLOC_CONTIG_VMO)) < 0) {
+printf("ZX_RSRC_ALLOC_CONTIG_VMO fail\n");
         return status;
     }
 

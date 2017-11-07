@@ -53,6 +53,12 @@ zx_status_t io_buffer_init_vmo(io_buffer_t* buffer, zx_handle_t vmo_handle,
 zx_status_t io_buffer_init_physical(io_buffer_t* buffer, zx_paddr_t addr, size_t size,
                                     zx_handle_t resource, uint32_t cache_policy);
 
+// Initializes a contiguous io_buffer. Same as calling io_buffer_init with IO_BUFFER_CONTIG,
+// except it allows passing in the resource to be used for the syscall.
+// An alignment of zero is interpreted as requesting page alignment.
+zx_status_t io_buffer_init_contiguous(io_buffer_t* buffer, size_t size, uint32_t alignment_log2,
+                                      zx_handle_t resource, uint32_t flags);
+
 zx_status_t io_buffer_cache_op(io_buffer_t* buffer, const uint32_t op,
                                const zx_off_t offset, const size_t size);
 

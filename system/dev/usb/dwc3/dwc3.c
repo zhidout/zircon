@@ -8,6 +8,7 @@
 #include <ddk/protocol/usb-function.h>
 #include <hw/reg.h>
 #include <pretty/hexdump.h>
+#include <zircon/syscalls/resource.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -406,6 +407,13 @@ static zx_status_t dwc3_bind(void* ctx, zx_device_t* parent) {
         goto fail;
     }
 
+    zx_handle_t contig_vmo_rsrc;
+    status = pdev_get_resource(&dwc->pdev, ZX_RSRC_ALLOC_CONTIG_VMO, 0, 0, &contig_vmo_rsrc);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "dwc3_bind could not get ZX_RSRC_ALLOC_CONTIG_VMO\n");
+        goto fail;
+    }
+printf("contig_vmo_rsrc %u\n", contig_vmo_rsrc);
     mtx_init(&dwc->lock, mtx_plain);
 
     for (unsigned i = 0; i < countof(dwc->eps); i++) {
@@ -424,16 +432,17 @@ static zx_status_t dwc3_bind(void* ctx, zx_device_t* parent) {
         goto fail;
     }
 
-    status = io_buffer_init(&dwc->event_buffer, EVENT_BUFFER_SIZE, IO_BUFFER_RO | IO_BUFFER_CONTIG);
+    status = io_buffer_init_contiguous(&dwc->event_buffer, EVENT_BUFFER_SIZE, 0, IO_BUFFER_RO,
+                                       contig_vmo_rsrc);
     if (status != ZX_OK) {
-        zxlogf(ERROR, "dwc3_bind: io_buffer_init failed\n");
+        zxlogf(ERROR, "dwc3_bind: io_buffer_init_contiguous failed\n");
         goto fail;
     }
     io_buffer_cache_op(&dwc->event_buffer, ZX_VMO_OP_CACHE_CLEAN, 0, EVENT_BUFFER_SIZE);
 
-    status = io_buffer_init(&dwc->ep0_buffer, 65536, IO_BUFFER_RW | IO_BUFFER_CONTIG);
+    status = io_buffer_init_contiguous(&dwc->ep0_buffer, 65536, 0, IO_BUFFER_RW, contig_vmo_rsrc);
     if (status != ZX_OK) {
-        zxlogf(ERROR, "dwc3_bind: io_buffer_init failed\n");
+        zxlogf(ERROR, "dwc3_bind: io_buffer_init_contiguous failed\n");
         goto fail;
     }
 

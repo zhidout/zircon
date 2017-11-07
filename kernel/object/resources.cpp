@@ -22,6 +22,7 @@ zx_status_t validate_resource(zx_handle_t handle, uint32_t kind) {
     if ((rkind == ZX_RSRC_KIND_ROOT) || (rkind == kind)) {
         return ZX_OK;
     }
+printf("validate_resource fail kind %04X rkind %04X\n", kind, rkind);
     return ZX_ERR_ACCESS_DENIED;
 }
 

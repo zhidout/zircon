@@ -147,6 +147,25 @@ zx_status_t io_buffer_init_physical(io_buffer_t* buffer, zx_paddr_t addr, size_t
     return ZX_OK;
 }
 
+zx_status_t io_buffer_init_contiguous(io_buffer_t* buffer, size_t size, uint32_t alignment_log2,
+                                      zx_handle_t resource, uint32_t flags) {
+    if (size == 0) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    if (flags & ~IO_BUFFER_FLAGS_MASK) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    zx_handle_t vmo_handle;
+    zx_status_t status = zx_vmo_create_contiguous(resource, size, alignment_log2, &vmo_handle);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "io_buffer: zx_vmo_create_contiguous failed %d\n", status);
+        return status;
+    }
+
+    return io_buffer_init_common(buffer, vmo_handle, size, 0, flags);
+}
+
 void io_buffer_release(io_buffer_t* buffer) {
     if (buffer->vmo_handle) {
         zx_vmar_unmap(zx_vmar_root_self(), (uintptr_t)buffer->virt, buffer->size);
