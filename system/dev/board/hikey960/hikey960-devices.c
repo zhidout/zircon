@@ -4,13 +4,14 @@
 
 #include <ddk/debug.h>
 #include <ddk/protocol/platform-defs.h>
+#include <soc/hi3660/hi3660-hw.h>
+
 #include <stdio.h>
 
-#include "hi3660-bus.h"
-#include "hi3660-hw.h"
+#include "hikey960.h"
 #include "hikey960-hw.h"
 
-//#define GPIO_TEST 1
+#define GPIO_TEST 1
 
 static const pbus_mmio_t dwc3_mmios[] = {
     {
@@ -108,15 +109,15 @@ static const pbus_gpio_t gpio_test_gpios[] = {
 
 static const pbus_dev_t gpio_test_dev = {
     .name = "gpio-test",
-    .vid = PDEV_VID_HI_SILICON,
-    .pid = PDEV_PID_HI3660,
-    .did = PDEV_DID_HI3660_GPIO_TEST,
+    .vid = PDEV_VID_96BOARDS,
+    .pid = PDEV_PID_HIKEY960,
+    .did = PDEV_DID_HIKEY960_GPIO_TEST,
     .gpios = gpio_test_gpios,
     .gpio_count = countof(gpio_test_gpios),
 };
 #endif
 
-zx_status_t hi3360_add_devices(hi3660_bus_t* bus) {
+zx_status_t hikey960_add_devices(hikey960_t* bus) {
     zx_status_t status;
 
     if ((status = pbus_device_add(&bus->pbus, &dwc3_dev, 0)) != ZX_OK) {

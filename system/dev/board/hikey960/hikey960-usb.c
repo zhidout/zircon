@@ -6,13 +6,15 @@
 #include <ddk/protocol/gpio.h>
 #include <ddk/protocol/platform-defs.h>
 #include <hw/reg.h>
+#include <soc/hi3660/hi3660-regs.h>
+#include <soc/hi3660/hi3660-hw.h>
+
 #include <stdio.h>
 
-#include "hi3660-bus.h"
-#include "hi3660-regs.h"
+#include "hikey960.h"
 #include "hikey960-hw.h"
 
-zx_status_t hi3360_usb_init(hi3660_bus_t* bus) {
+zx_status_t hikey960_usb_init(hikey960_t* bus) {
     volatile void* usb3otg_bc = io_buffer_virt(&bus->usb3otg_bc);
     volatile void* peri_crg = io_buffer_virt(&bus->peri_crg);
     volatile void* pctrl = io_buffer_virt(&bus->pctrl);
@@ -59,7 +61,7 @@ zx_status_t hi3360_usb_init(hi3660_bus_t* bus) {
     return ZX_OK;
 }
 
-zx_status_t hi3660_usb_set_mode(hi3660_bus_t* bus, usb_mode_t mode) {
+zx_status_t hikey960_usb_set_mode(hikey960_t* bus, usb_mode_t mode) {
     if (mode == bus->usb_mode) {
         return ZX_OK;
     }

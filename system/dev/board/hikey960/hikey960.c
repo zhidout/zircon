@@ -20,11 +20,13 @@
 #include <zircon/syscalls.h>
 #include <zircon/assert.h>
 
-#include "pl061.h"
-#include "hi3660-bus.h"
-#include "hi3660-hw.h"
+#include <gpio/arm-pl061/pl061.h>
+#include <soc/hi3660/hi3660-gpios.h>
+#include <soc/hi3660/hi3660-hw.h>
 
-static pl061_gpios_t* find_gpio(hi3660_bus_t* bus, uint32_t index) {
+#include "hikey960.h"
+
+static pl061_gpios_t* find_gpio(hikey960_t* bus, uint32_t index) {
     pl061_gpios_t* gpios;
     // TODO(voydanoff) consider using a fancier data structure here
     list_for_every_entry(&bus->gpios, gpios, pl061_gpios_t, node) {
@@ -37,7 +39,7 @@ static pl061_gpios_t* find_gpio(hi3660_bus_t* bus, uint32_t index) {
 }
 
 static zx_status_t hi3660_gpio_config(void* ctx, uint32_t index, gpio_config_flags_t flags) {
-    hi3660_bus_t* bus = ctx;
+    hikey960_t* bus = ctx;
     pl061_gpios_t* gpios = find_gpio(bus, index);
     if (!gpios) {
         return ZX_ERR_INVALID_ARGS;
@@ -46,7 +48,7 @@ static zx_status_t hi3660_gpio_config(void* ctx, uint32_t index, gpio_config_fla
 }
 
 static zx_status_t hi3660_gpio_read(void* ctx, uint32_t index, uint8_t* out_value) {
-    hi3660_bus_t* bus = ctx;
+    hikey960_t* bus = ctx;
     pl061_gpios_t* gpios = find_gpio(bus, index);
     if (!gpios) {
         return ZX_ERR_INVALID_ARGS;
@@ -55,7 +57,7 @@ static zx_status_t hi3660_gpio_read(void* ctx, uint32_t index, uint8_t* out_valu
 }
 
 static zx_status_t hi3660_gpio_write(void* ctx, uint32_t index, uint8_t value) {
-    hi3660_bus_t* bus = ctx;
+    hikey960_t* bus = ctx;
     pl061_gpios_t* gpios = find_gpio(bus, index);
     if (!gpios) {
         return ZX_ERR_INVALID_ARGS;
@@ -69,28 +71,28 @@ static gpio_protocol_ops_t gpio_ops = {
     .write = hi3660_gpio_write,
 };
 
-static zx_status_t hi3660_get_initial_mode(void* ctx, usb_mode_t* out_mode) {
+static zx_status_t hikey960_get_initial_mode(void* ctx, usb_mode_t* out_mode) {
     *out_mode = USB_MODE_HOST;
     return ZX_OK;
 }
 
-static zx_status_t hi3660_set_mode(void* ctx, usb_mode_t mode) {
-    hi3660_bus_t* bus = ctx;
+static zx_status_t hikey960_set_mode(void* ctx, usb_mode_t mode) {
+    hikey960_t* bus = ctx;
 
     if (mode == USB_MODE_OTG) {
         return ZX_ERR_NOT_SUPPORTED;
     }
 
-    return hi3660_usb_set_mode(bus, mode);
+    return hikey960_usb_set_mode(bus, mode);
 }
 
 usb_mode_switch_protocol_ops_t usb_mode_switch_ops = {
-    .get_initial_mode = hi3660_get_initial_mode,
-    .set_mode = hi3660_set_mode,
+    .get_initial_mode = hikey960_get_initial_mode,
+    .set_mode = hikey960_set_mode,
 };
 
-static zx_status_t hi3660_get_protocol(void* ctx, uint32_t proto_id, void* out) {
-    hi3660_bus_t* bus = ctx;
+static zx_status_t hikey960_get_protocol(void* ctx, uint32_t proto_id, void* out) {
+    hikey960_t* bus = ctx;
 
     switch (proto_id) {
     case ZX_PROTOCOL_GPIO: {
@@ -106,12 +108,12 @@ static zx_status_t hi3660_get_protocol(void* ctx, uint32_t proto_id, void* out) 
     }
 }
 
-static pbus_interface_ops_t hi3660_bus_ops = {
-    .get_protocol = hi3660_get_protocol,
+static pbus_interface_ops_t hikey960_bus_ops = {
+    .get_protocol = hikey960_get_protocol,
 };
 
-static void hi3660_release(void* ctx) {
-    hi3660_bus_t* bus = ctx;
+static void hikey960_release(void* ctx) {
+    hikey960_t* bus = ctx;
     pl061_gpios_t* gpios;
 
     while ((gpios = list_remove_head_type(&bus->gpios, pl061_gpios_t, node)) != NULL) {
@@ -126,13 +128,13 @@ static void hi3660_release(void* ctx) {
     free(bus);
 }
 
-static zx_protocol_device_t hi3660_device_protocol = {
+static zx_protocol_device_t hikey960_device_protocol = {
     .version = DEVICE_OPS_VERSION,
-    .release = hi3660_release,
+    .release = hikey960_release,
 };
 
-static zx_status_t hi3660_bind(void* ctx, zx_device_t* parent) {
-    hi3660_bus_t* bus = calloc(1, sizeof(hi3660_bus_t));
+static zx_status_t hikey960_bind(void* ctx, zx_device_t* parent) {
+    hikey960_t* bus = calloc(1, sizeof(hikey960_t));
     if (!bus) {
         return ZX_ERR_NO_MEMORY;
     }
@@ -160,9 +162,9 @@ static zx_status_t hi3660_bind(void* ctx, zx_device_t* parent) {
 
     device_add_args_t args = {
         .version = DEVICE_ADD_ARGS_VERSION,
-        .name = "hi3660-bus",
+        .name = "hikey960",
         .ctx = bus,
-        .ops = &hi3660_device_protocol,
+        .ops = &hikey960_device_protocol,
         // nothing should bind to this device
         // all interaction will be done via the pbus_interface_t
         .flags = DEVICE_ADD_NON_BINDABLE,
@@ -179,39 +181,39 @@ static zx_status_t hi3660_bind(void* ctx, zx_device_t* parent) {
     bus->usb_mode_switch.ctx = bus;
 
     pbus_interface_t intf;
-    intf.ops = &hi3660_bus_ops;
+    intf.ops = &hikey960_bus_ops;
     intf.ctx = bus;
     pbus_set_interface(&bus->pbus, &intf);
 
-    if ((status = hi3360_add_gpios(bus)) != ZX_OK) {
-        zxlogf(ERROR, "hi3660_bind: hi3360_add_gpios failed!\n");;
+    if ((status = hi3360_add_gpios(&bus->gpios)) != ZX_OK) {
+        zxlogf(ERROR, "hikey960_bind: hi3360_add_gpios failed!\n");;
     }
 
-    if ((status = hi3360_add_devices(bus)) != ZX_OK) {
-        zxlogf(ERROR, "hi3660_bind: hi3360_add_devices failed!\n");;
+    if ((status = hikey960_add_devices(bus)) != ZX_OK) {
+        zxlogf(ERROR, "hikey960_bind: hi3360_add_devices failed!\n");;
     }
 
     // must be after pbus_set_interface
-    if ((status = hi3360_usb_init(bus)) != ZX_OK) {
-        zxlogf(ERROR, "hi3660_bind: hi3360_usb_init failed!\n");;
+    if ((status = hikey960_usb_init(bus)) != ZX_OK) {
+        zxlogf(ERROR, "hikey960_bind: hi3360_usb_init failed!\n");;
     }
-    hi3660_usb_set_mode(bus, USB_MODE_NONE);
+    hikey960_usb_set_mode(bus, USB_MODE_NONE);
 
     return ZX_OK;
 
 fail:
-    zxlogf(ERROR, "hi3660_bind failed %d\n", status);
-    hi3660_release(bus);
+    zxlogf(ERROR, "hikey960_bind failed %d\n", status);
+    hikey960_release(bus);
     return status;
 }
 
-static zx_driver_ops_t hi3660_driver_ops = {
+static zx_driver_ops_t hikey960_driver_ops = {
     .version = DRIVER_OPS_VERSION,
-    .bind = hi3660_bind,
+    .bind = hikey960_bind,
 };
 
-ZIRCON_DRIVER_BEGIN(hi3660, hi3660_driver_ops, "zircon", "0.1", 3)
+ZIRCON_DRIVER_BEGIN(hikey960, hikey960_driver_ops, "zircon", "0.1", 3)
     BI_ABORT_IF(NE, BIND_PROTOCOL, ZX_PROTOCOL_PLATFORM_BUS),
-    BI_ABORT_IF(NE, BIND_PLATFORM_DEV_VID, PDEV_VID_HI_SILICON),
-    BI_MATCH_IF(EQ, BIND_PLATFORM_DEV_PID, PDEV_PID_HI3660),
-ZIRCON_DRIVER_END(hi3660)
+    BI_ABORT_IF(NE, BIND_PLATFORM_DEV_VID, PDEV_VID_96BOARDS),
+    BI_MATCH_IF(EQ, BIND_PLATFORM_DEV_PID, PDEV_PID_HIKEY960),
+ZIRCON_DRIVER_END(hikey960)

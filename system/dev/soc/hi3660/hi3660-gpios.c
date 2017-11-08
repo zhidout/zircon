@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "hi3660-bus.h"
-#include "pl061.h"
+#include <gpio/arm-pl061/pl061.h>
+#include <soc/hi3660/hi3660-gpios.h>
 
 // TODO(voydanoff) Move hard coded values to a header file
 
@@ -96,7 +96,7 @@ static const gpio_block_t gpio_blocks[] = {
     },
 };
 
-zx_status_t hi3360_add_gpios(hi3660_bus_t* bus) {
+zx_status_t hi3360_add_gpios(list_node_t* gpio_list) {
     zx_status_t status;
     zx_handle_t resource = get_root_resource();
 
@@ -121,7 +121,7 @@ zx_status_t hi3360_add_gpios(hi3660_bus_t* bus) {
         gpios->gpio_count = block->pin_count;
         gpios->irqs = block->irqs;
         gpios->irq_count = block->irq_count;
-        list_add_tail(&bus->gpios, &gpios->node);
+        list_add_tail(gpio_list, &gpios->node);
     }
 
     return ZX_OK;

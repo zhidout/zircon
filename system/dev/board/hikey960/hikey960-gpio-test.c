@@ -84,7 +84,7 @@ static zx_status_t gpio_test_bind(void* ctx, zx_device_t* parent) {
 
     device_add_args_t args = {
         .version = DEVICE_ADD_ARGS_VERSION,
-        .name = "hi3660-gpio-test",
+        .name = "hikey960-gpio-test",
         .ctx = gpio_test,
         .ops = &gpio_test_device_protocol,
         .flags = DEVICE_ADD_NON_BINDABLE,
@@ -105,9 +105,9 @@ static zx_driver_ops_t gpio_test_driver_ops = {
     .bind = gpio_test_bind,
 };
 
-ZIRCON_DRIVER_BEGIN(hi3660_gpio_test, gpio_test_driver_ops, "zircon", "0.1", 4)
+ZIRCON_DRIVER_BEGIN(hikey960_gpio_test, gpio_test_driver_ops, "zircon", "0.1", 4)
     BI_ABORT_IF(NE, BIND_PROTOCOL, ZX_PROTOCOL_PLATFORM_DEV),
-    BI_ABORT_IF(NE, BIND_PLATFORM_DEV_VID, PDEV_VID_HI_SILICON),
-    BI_MATCH_IF(EQ, BIND_PLATFORM_DEV_PID, PDEV_PID_HI3660),
-    BI_MATCH_IF(EQ, BIND_PLATFORM_DEV_DID, PDEV_DID_HI3660_GPIO_TEST),
-ZIRCON_DRIVER_END(hi3660_gpio_test)
+    BI_ABORT_IF(NE, BIND_PLATFORM_DEV_VID, PDEV_VID_96BOARDS),
+    BI_MATCH_IF(EQ, BIND_PLATFORM_DEV_PID, PDEV_PID_HIKEY960),
+    BI_MATCH_IF(EQ, BIND_PLATFORM_DEV_DID, PDEV_DID_HIKEY960_GPIO_TEST),
+ZIRCON_DRIVER_END(hikey960_gpio_test)
