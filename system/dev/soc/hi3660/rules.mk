@@ -9,7 +9,9 @@ MODULE := $(LOCAL_DIR)
 MODULE_TYPE := userlib
 
 MODULE_SRCS += \
+    $(LOCAL_DIR)/hi3660-bus.c \
     $(LOCAL_DIR)/hi3660-gpios.c \
+    $(LOCAL_DIR)/hi3660-usb.c \
 
 MODULE_STATIC_LIBS := \
     system/ulib/ddk \

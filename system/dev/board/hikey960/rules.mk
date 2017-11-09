@@ -14,9 +14,9 @@ MODULE_SRCS += \
     $(LOCAL_DIR)/hikey960-usb.c \
 
 MODULE_STATIC_LIBS := \
-    system/ulib/ddk \
-    system/dev/gpio/arm-pl061 \
     system/dev/soc/hi3660 \
+    system/dev/gpio/arm-pl061 \
+    system/ulib/ddk \
 
 MODULE_LIBS := \
     system/ulib/driver \
