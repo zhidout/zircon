@@ -12,9 +12,9 @@
 #include <zircon/assert.h>
 #include <zircon/types.h>
 
-#include "a113-bus.h"
-#include "a113-hw.h"
-#include "aml-i2c.h"
+#include <soc/aml-a113/a113-bus.h>
+#include <soc/aml-a113/a113-hw.h>
+#include <soc/aml-a113/aml-i2c.h>
 
 // turn this on to enable Gauss accelerometer test driver
 //#define I2C_TEST 1

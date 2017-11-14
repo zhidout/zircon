@@ -8,7 +8,7 @@
 #include <hw/reg.h>
 #include <zircon/assert.h>
 
-#include "a113-bus.h"
+#include "gauss.h"
 
 #define PDM_MMIO_BASE 0xff632000
 #define EE_AUDIO_MMIO_BASE 0xff642000

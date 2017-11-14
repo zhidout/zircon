@@ -6,8 +6,8 @@
 #include <ddk/protocol/platform-defs.h>
 #include <hw/reg.h>
 
-#include "a113-bus.h"
-#include "a113-usb-phy.h"
+#include <soc/aml-a113/a113-bus.h>
+#include <soc/aml-a113/a113-usb-phy.h>
 
 #define DWC3_MMIO_BASE      0xff500000
 #define DWC3_MMIO_LENGTH    0x100000

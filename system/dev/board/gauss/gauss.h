@@ -10,7 +10,7 @@
 #include <ddk/protocol/platform-bus.h>
 #include <ddk/protocol/usb-mode-switch.h>
 
-#include "aml-i2c.h"
+#include <soc/aml-a113/aml-i2c.h>
 
 typedef struct {
     platform_bus_protocol_t pbus;
