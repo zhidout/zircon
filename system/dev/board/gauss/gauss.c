@@ -15,12 +15,10 @@
 #include <ddk/device.h>
 #include <ddk/driver.h>
 #include <ddk/protocol/platform-defs.h>
-//#include <hw/reg.h>
 
 #include <zircon/assert.h>
 #include <zircon/process.h>
 #include <zircon/syscalls.h>
-
 
 #include "gauss.h"
 #include "gauss-hw.h"
@@ -48,10 +46,10 @@ static zx_status_t gauss_bus_get_protocol(void* ctx, uint32_t proto_id, void* ou
         memcpy(out, &bus->usb_mode_switch, sizeof(bus->usb_mode_switch));
         return ZX_OK;
     case ZX_PROTOCOL_GPIO:
-        memcpy(out, &bus->gpio, sizeof(bus->gpio));
+        memcpy(out, &bus->a113->gpio, sizeof(bus->a113->gpio));
         return ZX_OK;
     case ZX_PROTOCOL_I2C:
-        memcpy(out, &bus->i2c, sizeof(bus->i2c));
+        memcpy(out, &bus->a113->i2c, sizeof(bus->a113->i2c));
         return ZX_OK;
     default:
         return ZX_ERR_NOT_SUPPORTED;
@@ -65,8 +63,9 @@ static pbus_interface_ops_t gauss_bus_ops = {
 static void gauss_bus_release(void* ctx) {
     gauss_bus_t* bus = ctx;
 
-//???    a113_gpio_release(bus);
-
+    if (bus->a113) {
+        a113_bus_release(bus->a113);
+    }
     free(bus);
 }
 
@@ -83,34 +82,25 @@ static zx_status_t gauss_bus_bind(void* ctx, zx_device_t* parent) {
         return ZX_ERR_NO_MEMORY;
     }
 
-    if (device_get_protocol(parent, ZX_PROTOCOL_PLATFORM_BUS, &bus->pbus) != ZX_OK) {
-        free(bus);
-        return ZX_ERR_NOT_SUPPORTED;
+    if ((status = device_get_protocol(parent, ZX_PROTOCOL_PLATFORM_BUS, &bus->pbus)) != ZX_OK) {
+        goto fail;
     }
-
-/* ????
-    // Note: We need to do this before adding this device because this method
-    //       sets up the GPIO protocol as well.
-    if ((status = a113_gpio_init(bus)) != ZX_OK) {
-        zxlogf(ERROR, "a113_gpio_init failed: %d\n", status);
-    }
-    if ((status = a113_i2c_init(bus)) != ZX_OK) {
-        zxlogf(ERROR, "a113_i2c_init failed: %d\n", status);
+    if ((status = a113_bus_init(&bus->a113)) != ZX_OK) {
+        goto fail;
     }
 
     // pinmux for Gauss i2c
-    a113_pinmux_config(bus, I2C_SCK_A, 1);
-    a113_pinmux_config(bus, I2C_SDA_A, 1);
-    a113_pinmux_config(bus, I2C_SCK_B, 1);
-    a113_pinmux_config(bus, I2C_SDA_B, 1);
+    a113_pinmux_config(bus->a113, I2C_SCK_A, 1);
+    a113_pinmux_config(bus->a113, I2C_SDA_A, 1);
+    a113_pinmux_config(bus->a113, I2C_SCK_B, 1);
+    a113_pinmux_config(bus->a113, I2C_SDA_B, 1);
 
     // Config pinmux for gauss PDM pins
-    a113_pinmux_config(bus, A113_GPIOA(14), 1);
-    a113_pinmux_config(bus, A113_GPIOA(15), 1);
-    a113_pinmux_config(bus, A113_GPIOA(16), 1);
-    a113_pinmux_config(bus, A113_GPIOA(17), 1);
-    a113_pinmux_config(bus, A113_GPIOA(18), 1);
-*/
+    a113_pinmux_config(bus->a113, A113_GPIOA(14), 1);
+    a113_pinmux_config(bus->a113, A113_GPIOA(15), 1);
+    a113_pinmux_config(bus->a113, A113_GPIOA(16), 1);
+    a113_pinmux_config(bus->a113, A113_GPIOA(17), 1);
+    a113_pinmux_config(bus->a113, A113_GPIOA(18), 1);
 
     bus->usb_mode_switch.ops = &usb_mode_switch_ops;
     bus->usb_mode_switch.ctx = bus;

@@ -15,7 +15,6 @@
 typedef struct {
     gpio_protocol_t gpio;
     i2c_protocol_t i2c;
-    io_buffer_t usb_phy;
     io_buffer_t periphs_reg;        // PMux/GPIO
     io_buffer_t periphs_ao_reg;     // PMux/GPIO for AO domain
     aml_i2c_dev_t* i2c_devs[AML_I2C_COUNT];

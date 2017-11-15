@@ -5,18 +5,14 @@
 #pragma once
 
 #include <ddk/io-buffer.h>
-#include <ddk/protocol/gpio.h>
-#include <ddk/protocol/i2c.h>
 #include <ddk/protocol/platform-bus.h>
 #include <ddk/protocol/usb-mode-switch.h>
-
-#include <soc/aml-a113/aml-i2c.h>
+#include <soc/aml-a113/a113-bus.h>
 
 typedef struct {
     platform_bus_protocol_t pbus;
+    a113_bus_t* a113;
     usb_mode_switch_protocol_t usb_mode_switch;
-    gpio_protocol_t gpio;
-    i2c_protocol_t i2c;
     io_buffer_t usb_phy;
 } gauss_bus_t;
 

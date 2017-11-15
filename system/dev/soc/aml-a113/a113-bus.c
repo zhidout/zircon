@@ -32,10 +32,9 @@ zx_status_t a113_bus_init(a113_bus_t** out) {
         return ZX_ERR_NO_MEMORY;
     }
 
-    // Note: We need to do this before adding this device because this method
-    //       sets up the GPIO protocol as well.
     if ((status = a113_gpio_init(bus)) != ZX_OK) {
         zxlogf(ERROR, "a113_gpio_init failed: %d\n", status);
+        goto fail;
     }
     if ((status = a113_i2c_init(bus)) != ZX_OK) {
         zxlogf(ERROR, "a113_i2c_init failed: %d\n", status);
@@ -52,6 +51,6 @@ fail:
 }
 
 void a113_bus_release(a113_bus_t* bus) {
-    //TODO clean up other stuff
+    a113_gpio_release(bus);
     free(bus);
 }
