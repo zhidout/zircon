@@ -23,13 +23,6 @@
 #include "xhci-root-hub.h"
 #include "xhci-trb.h"
 
-#if __x86_64__
-// cache is coherent on x86
-#define XHCI_USE_CACHE_OPS  0
-#else
-#define XHCI_USE_CACHE_OPS  1
-#endif
-
 // choose ring sizes to allow each ring to fit in a single page
 #define COMMAND_RING_SIZE (PAGE_SIZE / sizeof(xhci_trb_t))
 #define TRANSFER_RING_SIZE (PAGE_SIZE / sizeof(xhci_trb_t))

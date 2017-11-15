@@ -183,10 +183,9 @@ static zx_status_t xhci_start_transfer_locked(xhci_t* xhci, xhci_slot_t* slot, u
 
     usb_request_phys_iter_init(&state->phys_iter, req, XHCI_MAX_DATA_BUFFER);
     const xhci_endpoint_context_t* epc = ep->epc;
-#if XHCI_USE_CACHE_OPS
-    io_buffer_cache_op(&slot->buffer, ZX_VMO_OP_CACHE_INVALIDATE,
-                       (ep_index + 1) * xhci->context_size, sizeof(xhci_endpoint_context_t));
-#endif
+
+// FIXME - this shouldn't be necessary
+    zx_cache_flush(&epc->epc1, sizeof(epc->epc1), ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE);
     uint32_t ep_type = XHCI_GET_BITS32(&epc->epc1, EP_CTX_EP_TYPE_START, EP_CTX_EP_TYPE_BITS);
     if (ep_type >= 4) ep_type -= 4;
     state->ep_type = ep_type;
@@ -279,6 +278,9 @@ static zx_status_t xhci_continue_transfer_locked(xhci_t* xhci, xhci_slot_t* slot
     // need to clean the cache for both IN and OUT transfers
     usb_request_cacheop(req, USB_REQUEST_CACHE_CLEAN, 0, header->length);
 #endif
+//        zx_cache_flush(req->sc, sizeof(*slot->sc),
+//                       ZX_CACHE_FLUSH_DATA | ZX_CACHE_FLUSH_INVALIDATE);
+
 
     // Data Stage
     zx_paddr_t paddr;
@@ -838,20 +840,6 @@ void xhci_handle_transfer_event(xhci_t* xhci, xhci_trb_t* trb) {
 
     // call complete callbacks out of the lock
     while ((req = list_remove_head_type(&completed_reqs, usb_request_t, node)) != NULL) {
-#if XHCI_USE_CACHE_OPS
-        if (req->response.actual > 0) {
-            uint8_t direction;
-
-            if (req->header.ep_address == 0) {
-                direction = req->setup.bmRequestType & USB_ENDPOINT_DIR_MASK;
-            } else {
-                direction = req->header.ep_address & USB_ENDPOINT_DIR_MASK;
-            }
-            if (direction == USB_DIR_IN) {
-                usb_request_cacheop(req, ZX_VMO_OP_CACHE_INVALIDATE, 0, req->response.actual);
-            }
-        }
-#endif
         usb_request_complete(req, req->response.status, req->response.actual);
     }
 }
