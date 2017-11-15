@@ -18,22 +18,11 @@ typedef struct {
     gpio_protocol_t gpio;
     i2c_protocol_t i2c;
     io_buffer_t usb_phy;
-    io_buffer_t periphs_reg;        // PMux/GPIO
-    io_buffer_t periphs_ao_reg;     // PMux/GPIO for AO domain
-    aml_i2c_dev_t* i2c_devs[AML_I2C_COUNT];
-} a113_bus_t;
+} gauss_bus_t;
 
-// a113-audio.c
-zx_status_t a113_audio_init(a113_bus_t* bus);
+// gauss-audio.c
+zx_status_t gauss_audio_init(gauss_bus_t* bus);
 
-// a113-gpio.c
-zx_status_t a113_pinmux_config(void* ctx, const uint32_t pin, const uint32_t fn);
-zx_status_t a113_gpio_init(a113_bus_t* bus);
-void a113_gpio_release(a113_bus_t* bus);
-
-// a113-i2c.c
-zx_status_t a113_i2c_init(a113_bus_t* bus);
-
-// a113-usb.c
-zx_status_t a113_usb_init(a113_bus_t* bus);
-zx_status_t a113_usb_set_mode(a113_bus_t* bus, usb_mode_t mode);
+// gauss-usb.c
+zx_status_t gauss_usb_init(gauss_bus_t* bus);
+zx_status_t gauss_usb_set_mode(gauss_bus_t* bus, usb_mode_t mode);

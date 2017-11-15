@@ -25,23 +25,23 @@
 #include "gauss.h"
 #include "gauss-hw.h"
 
-static zx_status_t a113_get_initial_mode(void* ctx, usb_mode_t* out_mode) {
+static zx_status_t gauss_get_initial_mode(void* ctx, usb_mode_t* out_mode) {
     *out_mode = USB_MODE_HOST;
     return ZX_OK;
 }
 
-static zx_status_t a113_set_mode(void* ctx, usb_mode_t mode) {
-    a113_bus_t* bus = ctx;
-    return a113_usb_set_mode(bus, mode);
+static zx_status_t gauss_set_mode(void* ctx, usb_mode_t mode) {
+    gauss_bus_t* bus = ctx;
+    return gauss_usb_set_mode(bus, mode);
 }
 
 usb_mode_switch_protocol_ops_t usb_mode_switch_ops = {
-    .get_initial_mode = a113_get_initial_mode,
-    .set_mode = a113_set_mode,
+    .get_initial_mode = gauss_get_initial_mode,
+    .set_mode = gauss_set_mode,
 };
 
-static zx_status_t a113_bus_get_protocol(void* ctx, uint32_t proto_id, void* out) {
-    a113_bus_t* bus = ctx;
+static zx_status_t gauss_bus_get_protocol(void* ctx, uint32_t proto_id, void* out) {
+    gauss_bus_t* bus = ctx;
 
     switch (proto_id) {
     case ZX_PROTOCOL_USB_MODE_SWITCH:
@@ -58,27 +58,27 @@ static zx_status_t a113_bus_get_protocol(void* ctx, uint32_t proto_id, void* out
     }
 }
 
-static pbus_interface_ops_t a113_bus_bus_ops = {
-    .get_protocol = a113_bus_get_protocol,
+static pbus_interface_ops_t gauss_bus_ops = {
+    .get_protocol = gauss_bus_get_protocol,
 };
 
-static void a113_bus_release(void* ctx) {
-    a113_bus_t* bus = ctx;
+static void gauss_bus_release(void* ctx) {
+    gauss_bus_t* bus = ctx;
 
-    a113_gpio_release(bus);
+//???    a113_gpio_release(bus);
 
     free(bus);
 }
 
-static zx_protocol_device_t a113_bus_device_protocol = {
+static zx_protocol_device_t gauss_bus_device_protocol = {
     .version = DEVICE_OPS_VERSION,
-    .release = a113_bus_release,
+    .release = gauss_bus_release,
 };
 
-static zx_status_t a113_bus_bind(void* ctx, zx_device_t* parent) {
+static zx_status_t gauss_bus_bind(void* ctx, zx_device_t* parent) {
     zx_status_t status;
 
-    a113_bus_t* bus = calloc(1, sizeof(a113_bus_t));
+    gauss_bus_t* bus = calloc(1, sizeof(gauss_bus_t));
     if (!bus) {
         return ZX_ERR_NO_MEMORY;
     }
@@ -88,6 +88,7 @@ static zx_status_t a113_bus_bind(void* ctx, zx_device_t* parent) {
         return ZX_ERR_NOT_SUPPORTED;
     }
 
+/* ????
     // Note: We need to do this before adding this device because this method
     //       sets up the GPIO protocol as well.
     if ((status = a113_gpio_init(bus)) != ZX_OK) {
@@ -109,15 +110,16 @@ static zx_status_t a113_bus_bind(void* ctx, zx_device_t* parent) {
     a113_pinmux_config(bus, A113_GPIOA(16), 1);
     a113_pinmux_config(bus, A113_GPIOA(17), 1);
     a113_pinmux_config(bus, A113_GPIOA(18), 1);
+*/
 
     bus->usb_mode_switch.ops = &usb_mode_switch_ops;
     bus->usb_mode_switch.ctx = bus;
 
     device_add_args_t args = {
         .version = DEVICE_ADD_ARGS_VERSION,
-        .name = "a113-bus",
+        .name = "gauss-bus",
         .ctx = bus,
-        .ops = &a113_bus_device_protocol,
+        .ops = &gauss_bus_device_protocol,
         .flags = DEVICE_ADD_NON_BINDABLE,
     };
 
@@ -127,32 +129,32 @@ static zx_status_t a113_bus_bind(void* ctx, zx_device_t* parent) {
     }
 
     pbus_interface_t intf;
-    intf.ops = &a113_bus_bus_ops;
+    intf.ops = &gauss_bus_ops;
     intf.ctx = bus;
     pbus_set_interface(&bus->pbus, &intf);
 
-    if ((status = a113_usb_init(bus)) != ZX_OK) {
-        zxlogf(ERROR, "a113_bus_bind failed: %d\n", status);
+    if ((status = gauss_usb_init(bus)) != ZX_OK) {
+        zxlogf(ERROR, "gauss_usb_init failed: %d\n", status);
     }
-    if ((status = a113_audio_init(bus)) != ZX_OK) {
-        zxlogf(ERROR, "a113_audio_init failed: %d\n", status);
+    if ((status = gauss_audio_init(bus)) != ZX_OK) {
+        zxlogf(ERROR, "gauss_audio_init failed: %d\n", status);
     }
 
     return ZX_OK;
 
 fail:
-    printf("a113_bus_bind failed %d\n", status);
-    a113_bus_release(bus);
+    printf("gauss_bus_bind failed %d\n", status);
+    gauss_bus_release(bus);
     return status;
 }
 
-static zx_driver_ops_t a113_bus_driver_ops = {
+static zx_driver_ops_t gauss_bus_driver_ops = {
     .version = DRIVER_OPS_VERSION,
-    .bind = a113_bus_bind,
+    .bind = gauss_bus_bind,
 };
 
-ZIRCON_DRIVER_BEGIN(a113_bus, a113_bus_driver_ops, "zircon", "0.1", 3)
+ZIRCON_DRIVER_BEGIN(gauss_bus, gauss_bus_driver_ops, "zircon", "0.1", 3)
     BI_ABORT_IF(NE, BIND_PROTOCOL, ZX_PROTOCOL_PLATFORM_BUS),
     BI_ABORT_IF(NE, BIND_PLATFORM_DEV_VID, PDEV_VID_GOOGLE),
     BI_MATCH_IF(EQ, BIND_PLATFORM_DEV_PID, PDEV_PID_GAUSS),
-ZIRCON_DRIVER_END(a113_bus)
+ZIRCON_DRIVER_END(gauss_bus)

@@ -24,7 +24,7 @@
 #include <soc/aml-a113/a113-hw.h>
 
 
-static zx_status_t a113_bus_init(a113_bus_t** out) {
+zx_status_t a113_bus_init(a113_bus_t** out) {
     zx_status_t status;
 
     a113_bus_t* bus = calloc(1, sizeof(a113_bus_t));
@@ -41,20 +41,17 @@ static zx_status_t a113_bus_init(a113_bus_t** out) {
         zxlogf(ERROR, "a113_i2c_init failed: %d\n", status);
         goto fail;
     }
-    if ((status = a113_usb_init(bus)) != ZX_OK) {
-        zxlogf(ERROR, "a113_bus_bind failed: %d\n", status);
-        goto fail;
-    }
-    if ((status = a113_audio_init(bus)) != ZX_OK) {
-        zxlogf(ERROR, "a113_audio_init failed: %d\n", status);
-        goto fail;
-    }
 
     *out = bus;
     return ZX_OK;
 
 fail:
     printf("a113_bus_init failed %d\n", status);
-//!!!    a113_bus_release(bus);
+    a113_bus_release(bus);
     return status;
+}
+
+void a113_bus_release(a113_bus_t* bus) {
+    //TODO clean up other stuff
+    free(bus);
 }

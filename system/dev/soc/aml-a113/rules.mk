@@ -12,7 +12,6 @@ MODULE_SRCS += \
     $(LOCAL_DIR)/a113-bus.c \
     $(LOCAL_DIR)/a113-gpio.c \
     $(LOCAL_DIR)/a113-i2c.c \
-    $(LOCAL_DIR)/a113-usb.c \
     $(LOCAL_DIR)/aml-i2c.c \
 
 MODULE_STATIC_LIBS := \
