@@ -55,6 +55,16 @@ zx_status_t sys_nanosleep(zx_time_t deadline) {
     return thread_sleep_etc(deadline, /*interruptable=*/true);
 }
 
+zx_status_t sys_cache_invalidate(zx_handle_t hdl, uintptr_t addr, size_t len) {
+    // Perform a permissions check for hdl.
+
+    LTRACEF("invalidate %p, %lu\n", (void*)addr, len);
+    // find the address that needs to be invalidated
+
+    // call arch_invalidate_cache_range
+    return ZX_OK;
+}
+
 // This must be accessed atomically from any given thread.
 static fbl::atomic<int64_t> utc_offset;
 
