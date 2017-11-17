@@ -12,6 +12,7 @@
 #include <threads.h>
 
 #include "xhci-transfer.h"
+#include "xhci-device-manager.h"
 #include "xhci-util.h"
 
 static void print_trb(xhci_t* xhci, xhci_transfer_ring_t* ring, xhci_trb_t* trb) {
@@ -24,207 +25,6 @@ static void print_trb(xhci_t* xhci, xhci_transfer_ring_t* ring, xhci_trb_t* trb)
 
 // reads a range of bits from an integer
 #define READ_FIELD(i, start, bits) (((i) >> (start)) & ((1 << (bits)) - 1))
-
-// This resets the transfer ring's dequeue pointer just past the last completed transfer.
-// This can only be called when the endpoint is stopped and we are locked on ep->lock.
-static zx_status_t xhci_reset_dequeue_ptr_locked(xhci_t* xhci, uint32_t slot_id,
-                                                 uint32_t ep_index) {
-    xhci_slot_t* slot = &xhci->slots[slot_id];
-    xhci_endpoint_t* ep = &slot->eps[ep_index];
-    xhci_transfer_ring_t* transfer_ring = &ep->transfer_ring;
-
-    xhci_sync_command_t command;
-    xhci_sync_command_init(&command);
-    uint64_t ptr = xhci_transfer_ring_current_phys(transfer_ring);
-    ptr |= transfer_ring->pcs;
-    // command expects device context index, so increment ep_index by 1
-    uint32_t control = (slot_id << TRB_SLOT_ID_START) |
-                        ((ep_index + 1) << TRB_ENDPOINT_ID_START);
-    xhci_post_command(xhci, TRB_CMD_SET_TR_DEQUEUE, ptr, control, &command.context);
-    int cc = xhci_sync_command_wait(&command);
-    if (cc != TRB_CC_SUCCESS) {
-        zxlogf(ERROR, "TRB_CMD_SET_TR_DEQUEUE failed cc: %d\n", cc);
-        return ZX_ERR_INTERNAL;
-    }
-    transfer_ring->dequeue_ptr = transfer_ring->current;
-
-    return ZX_OK;
-}
-
-static void xhci_process_transactions_locked(xhci_t* xhci, xhci_slot_t* slot, uint8_t ep_index,
-                                             list_node_t* completed_reqs);
-
-zx_status_t xhci_reset_endpoint(xhci_t* xhci, uint32_t slot_id, uint32_t ep_index) {
-    xhci_slot_t* slot = &xhci->slots[slot_id];
-    xhci_endpoint_t* ep = &slot->eps[ep_index];
-    usb_request_t* req;
-
-    // Recover from Halted and Error conditions. See section 4.8.3 of the XHCI spec.
-
-    mtx_lock(&ep->lock);
-
-    if (ep->state != EP_STATE_HALTED) {
-        mtx_unlock(&ep->lock);
-        return ZX_OK;
-    }
-
-    int ep_ctx_state = xhci_get_ep_ctx_state(slot, ep);
-    zxlogf(TRACE, "xhci_reset_endpoint %d %d ep_ctx_state %d\n", slot_id, ep_index, ep_ctx_state);
-
-    if (ep_ctx_state == EP_CTX_STATE_STOPPED || ep_ctx_state == EP_CTX_STATE_RUNNING) {
-        ep->state = EP_STATE_RUNNING;
-        mtx_unlock(&ep->lock);
-        return ZX_OK;
-    }
-    if (ep_ctx_state == EP_CTX_STATE_HALTED) {
-        // reset the endpoint to move from Halted to Stopped state
-        xhci_sync_command_t command;
-        xhci_sync_command_init(&command);
-        // command expects device context index, so increment ep_index by 1
-        uint32_t control = (slot_id << TRB_SLOT_ID_START) |
-                            ((ep_index + 1) << TRB_ENDPOINT_ID_START);
-        xhci_post_command(xhci, TRB_CMD_RESET_ENDPOINT, 0, control, &command.context);
-        int cc = xhci_sync_command_wait(&command);
-        if (cc != TRB_CC_SUCCESS) {
-            zxlogf(ERROR, "xhci_reset_endpoint: TRB_CMD_RESET_ENDPOINT failed cc: %d\n", cc);
-            mtx_unlock(&ep->lock);
-            return ZX_ERR_INTERNAL;
-        }
-    }
-
-    // resetting the dequeue pointer gets us out of ERROR state, and is also necessary
-    // after TRB_CMD_RESET_ENDPOINT.
-    if (ep_ctx_state == EP_CTX_STATE_ERROR || ep_ctx_state == EP_CTX_STATE_HALTED) {
-        // move transfer ring's dequeue pointer passed the failed transaction
-        zx_status_t status = xhci_reset_dequeue_ptr_locked(xhci, slot_id, ep_index);
-        if (status != ZX_OK) {
-            mtx_unlock(&ep->lock);
-            return status;
-        }
-    }
-
-    // xhci_reset_dequeue_ptr_locked will skip past all pending transactions,
-    // so move them all to the queued list so they will be requeued
-    // Completed these with ZX_ERR_CANCELED out of the lock.
-    // Remove from tail and add to head to preserve the ordering
-    while ((req = list_remove_tail_type(&ep->pending_reqs, usb_request_t, node)) != NULL) {
-        list_add_head(&ep->queued_reqs, &req->node);
-    }
-
-    ep_ctx_state = xhci_get_ep_ctx_state(slot, ep);
-    zx_status_t status;
-    switch (ep_ctx_state) {
-    case EP_CTX_STATE_DISABLED:
-        ep->state = EP_STATE_DEAD;
-        status = ZX_ERR_IO_NOT_PRESENT;
-        break;
-    case EP_CTX_STATE_RUNNING:
-    case EP_CTX_STATE_STOPPED:
-        ep->state = EP_STATE_RUNNING;
-        status = ZX_OK;
-        break;
-    case EP_CTX_STATE_HALTED:
-    case EP_CTX_STATE_ERROR:
-        ep->state = EP_STATE_HALTED;
-        status = ZX_ERR_IO_REFUSED;
-        break;
-    default:
-        ep->state = EP_STATE_HALTED;
-        status = ZX_ERR_INTERNAL;
-        break;
-    }
-
-    list_node_t completed_reqs = LIST_INITIAL_VALUE(completed_reqs);
-    if (ep->state == EP_STATE_RUNNING) {
-        // start processing transactions again
-        xhci_process_transactions_locked(xhci, slot, ep_index, &completed_reqs);
-    }
-
-    mtx_unlock(&ep->lock);
-
-    // call complete callbacks out of the lock
-    while ((req = list_remove_head_type(&completed_reqs, usb_request_t, node)) != NULL) {
-        usb_request_complete(req, req->response.status, req->response.actual);
-    }
-
-    return status;
-}
-
-// locked on ep->lock
-static zx_status_t xhci_start_transfer_locked(xhci_t* xhci, xhci_slot_t* slot, uint32_t ep_index,
-                                              usb_request_t* req) {
-    xhci_endpoint_t* ep = &slot->eps[ep_index];
-    xhci_transfer_ring_t* ring = &ep->transfer_ring;
-    if (ep->state != EP_STATE_RUNNING) {
-        zxlogf(ERROR, "xhci_start_transfer_locked bad ep->state %d\n", ep->state);
-        return ZX_ERR_BAD_STATE;
-    }
-
-    xhci_transfer_state_t* state = ep->transfer_state;
-    memset(state, 0, sizeof(*state));
-
-    if (req->header.length > 0) {
-        zx_status_t status = usb_request_physmap(req);
-        if (status != ZX_OK) {
-            zxlogf(ERROR, "%s: usb_request_physmap failed: %d\n", __FUNCTION__, status);
-            return status;
-        }
-    }
-
-
-    // compute number of packets needed for this transaction
-    if (req->header.length > 0) {
-        usb_request_phys_iter_init(&state->phys_iter, req, XHCI_MAX_DATA_BUFFER);
-        zx_paddr_t dummy_paddr;
-        while (usb_request_phys_iter_next(&state->phys_iter, &dummy_paddr) > 0) {
-            state->packet_count++;
-        }
-    }
-
-    usb_request_phys_iter_init(&state->phys_iter, req, XHCI_MAX_DATA_BUFFER);
-
-    usb_setup_t* setup = (req->header.ep_address == 0 ? &req->setup : NULL);
-    if (setup) {
-        state->direction = setup->bmRequestType & USB_ENDPOINT_DIR_MASK;
-        state->needs_status = true;
-    } else {
-        state->direction = req->header.ep_address & USB_ENDPOINT_DIR_MASK;
-    }
-    state->needs_data_event = true;
-    // Zero length bulk transfers are allowed. We should have at least one transfer TRB
-    // to avoid consecutive event data TRBs on a transfer ring.
-    // See XHCI spec, section 4.11.5.2
-    state->needs_transfer_trb = ep->ep_type == USB_ENDPOINT_BULK;
-
-    size_t length = req->header.length;
-    uint32_t interrupter_target = 0;
-
-    if (setup) {
-        // Setup Stage
-        xhci_trb_t* trb = ring->current;
-        xhci_clear_trb(trb);
-
-        XHCI_SET_BITS32(&trb->ptr_low, SETUP_TRB_REQ_TYPE_START, SETUP_TRB_REQ_TYPE_BITS,
-                        setup->bmRequestType);
-        XHCI_SET_BITS32(&trb->ptr_low, SETUP_TRB_REQUEST_START, SETUP_TRB_REQUEST_BITS,
-                        setup->bRequest);
-        XHCI_SET_BITS32(&trb->ptr_low, SETUP_TRB_VALUE_START, SETUP_TRB_VALUE_BITS, setup->wValue);
-        XHCI_SET_BITS32(&trb->ptr_high, SETUP_TRB_INDEX_START, SETUP_TRB_INDEX_BITS, setup->wIndex);
-        XHCI_SET_BITS32(&trb->ptr_high, SETUP_TRB_LENGTH_START, SETUP_TRB_LENGTH_BITS, length);
-        XHCI_SET_BITS32(&trb->status, XFER_TRB_XFER_LENGTH_START, XFER_TRB_XFER_LENGTH_BITS, 8);
-        XHCI_SET_BITS32(&trb->status, XFER_TRB_INTR_TARGET_START, XFER_TRB_INTR_TARGET_BITS,
-                        interrupter_target);
-
-        uint32_t control_bits = (length == 0 ? XFER_TRB_TRT_NONE :
-                            (state->direction == USB_DIR_IN ? XFER_TRB_TRT_IN : XFER_TRB_TRT_OUT));
-        control_bits |= XFER_TRB_IDT; // immediate data flag
-        trb_set_control(trb, TRB_TRANSFER_SETUP, control_bits);
-        if (driver_get_log_flags() & DDK_LOG_SPEW) print_trb(xhci, ring, trb);
-        xhci_increment_ring(ring);
-    }
-
-    return ZX_OK;
-}
 
 // returns ZX_OK if req has been successfully queued,
 // ZX_ERR_SHOULD_WAIT if we ran out of TRBs and need to try again later,
@@ -406,8 +206,84 @@ static zx_status_t xhci_continue_transfer_locked(xhci_t* xhci, xhci_slot_t* slot
     return ZX_OK;
 }
 
-static void xhci_process_transactions_locked(xhci_t* xhci, xhci_slot_t* slot, uint8_t ep_index,
-                                             list_node_t* completed_reqs) {
+// locked on ep->lock
+static zx_status_t xhci_start_transfer_locked(xhci_t* xhci, xhci_slot_t* slot, uint32_t ep_index,
+                                              usb_request_t* req) {
+    xhci_endpoint_t* ep = &slot->eps[ep_index];
+    xhci_transfer_ring_t* ring = &ep->transfer_ring;
+    if (ep->state != EP_STATE_RUNNING) {
+        zxlogf(ERROR, "xhci_start_transfer_locked bad ep->state %d\n", ep->state);
+        return ZX_ERR_BAD_STATE;
+    }
+
+    xhci_transfer_state_t* state = ep->transfer_state;
+    memset(state, 0, sizeof(*state));
+
+    if (req->header.length > 0) {
+        zx_status_t status = usb_request_physmap(req);
+        if (status != ZX_OK) {
+            zxlogf(ERROR, "%s: usb_request_physmap failed: %d\n", __FUNCTION__, status);
+            return status;
+        }
+    }
+
+
+    // compute number of packets needed for this transaction
+    if (req->header.length > 0) {
+        usb_request_phys_iter_init(&state->phys_iter, req, XHCI_MAX_DATA_BUFFER);
+        zx_paddr_t dummy_paddr;
+        while (usb_request_phys_iter_next(&state->phys_iter, &dummy_paddr) > 0) {
+            state->packet_count++;
+        }
+    }
+
+    usb_request_phys_iter_init(&state->phys_iter, req, XHCI_MAX_DATA_BUFFER);
+
+    usb_setup_t* setup = (req->header.ep_address == 0 ? &req->setup : NULL);
+    if (setup) {
+        state->direction = setup->bmRequestType & USB_ENDPOINT_DIR_MASK;
+        state->needs_status = true;
+    } else {
+        state->direction = req->header.ep_address & USB_ENDPOINT_DIR_MASK;
+    }
+    state->needs_data_event = true;
+    // Zero length bulk transfers are allowed. We should have at least one transfer TRB
+    // to avoid consecutive event data TRBs on a transfer ring.
+    // See XHCI spec, section 4.11.5.2
+    state->needs_transfer_trb = ep->ep_type == USB_ENDPOINT_BULK;
+
+    size_t length = req->header.length;
+    uint32_t interrupter_target = 0;
+
+    if (setup) {
+        // Setup Stage
+        xhci_trb_t* trb = ring->current;
+        xhci_clear_trb(trb);
+
+        XHCI_SET_BITS32(&trb->ptr_low, SETUP_TRB_REQ_TYPE_START, SETUP_TRB_REQ_TYPE_BITS,
+                        setup->bmRequestType);
+        XHCI_SET_BITS32(&trb->ptr_low, SETUP_TRB_REQUEST_START, SETUP_TRB_REQUEST_BITS,
+                        setup->bRequest);
+        XHCI_SET_BITS32(&trb->ptr_low, SETUP_TRB_VALUE_START, SETUP_TRB_VALUE_BITS, setup->wValue);
+        XHCI_SET_BITS32(&trb->ptr_high, SETUP_TRB_INDEX_START, SETUP_TRB_INDEX_BITS, setup->wIndex);
+        XHCI_SET_BITS32(&trb->ptr_high, SETUP_TRB_LENGTH_START, SETUP_TRB_LENGTH_BITS, length);
+        XHCI_SET_BITS32(&trb->status, XFER_TRB_XFER_LENGTH_START, XFER_TRB_XFER_LENGTH_BITS, 8);
+        XHCI_SET_BITS32(&trb->status, XFER_TRB_INTR_TARGET_START, XFER_TRB_INTR_TARGET_BITS,
+                        interrupter_target);
+
+        uint32_t control_bits = (length == 0 ? XFER_TRB_TRT_NONE :
+                            (state->direction == USB_DIR_IN ? XFER_TRB_TRT_IN : XFER_TRB_TRT_OUT));
+        control_bits |= XFER_TRB_IDT; // immediate data flag
+        trb_set_control(trb, TRB_TRANSFER_SETUP, control_bits);
+        if (driver_get_log_flags() & DDK_LOG_SPEW) print_trb(xhci, ring, trb);
+        xhci_increment_ring(ring);
+    }
+
+    return ZX_OK;
+}
+
+void xhci_process_transactions_locked(xhci_t* xhci, xhci_slot_t* slot, uint8_t ep_index,
+                                      list_node_t* completed_reqs) {
     xhci_endpoint_t* ep = &slot->eps[ep_index];
 
     // loop until we fill our transfer ring or run out of requests to process
@@ -522,84 +398,6 @@ zx_status_t xhci_queue_transfer(xhci_t* xhci, usb_request_t* req) {
     }
 
     return ZX_OK;
-}
-
-zx_status_t xhci_cancel_transfers(xhci_t* xhci, uint32_t slot_id, uint32_t ep_index) {
-    zxlogf(TRACE, "xhci_cancel_transfers slot_id: %d ep_index: %d\n", slot_id, ep_index);
-
-    if (slot_id < 1 || slot_id > xhci->max_slots) {
-        return ZX_ERR_INVALID_ARGS;
-    }
-    if (ep_index >= XHCI_NUM_EPS) {
-        return ZX_ERR_INVALID_ARGS;
-    }
-
-    xhci_slot_t* slot = &xhci->slots[slot_id];
-    xhci_endpoint_t* ep = &slot->eps[ep_index];
-    list_node_t completed_reqs = LIST_INITIAL_VALUE(completed_reqs);
-    usb_request_t* req;
-    usb_request_t* temp;
-    zx_status_t status = ZX_OK;
-
-    mtx_lock(&ep->lock);
-
-    if (!list_is_empty(&ep->pending_reqs)) {
-        // stop the endpoint and remove transactions that have already been queued
-        // in the transfer ring
-        ep->state = EP_STATE_PAUSED;
-
-        xhci_sync_command_t command;
-        xhci_sync_command_init(&command);
-        // command expects device context index, so increment ep_index by 1
-        uint32_t control = (slot_id << TRB_SLOT_ID_START) |
-                           ((ep_index + 1) << TRB_ENDPOINT_ID_START);
-        xhci_post_command(xhci, TRB_CMD_STOP_ENDPOINT, 0, control, &command.context);
-
-        // We can't block on command completion while holding the lock.
-        // It is safe to unlock here because no additional transactions will be
-        // queued on the endpoint when ep->state is EP_STATE_PAUSED.
-        mtx_unlock(&ep->lock);
-        int cc = xhci_sync_command_wait(&command);
-        if (cc != TRB_CC_SUCCESS) {
-            // TRB_CC_CONTEXT_STATE_ERROR is normal here in the case of a disconnected device,
-            // since by then the endpoint would already be in error state.
-            zxlogf(ERROR, "xhci_cancel_transfers: TRB_CMD_STOP_ENDPOINT failed cc: %d\n", cc);
-            return ZX_ERR_INTERNAL;
-        }
-        mtx_lock(&ep->lock);
-
-        // TRB_CMD_STOP_ENDPOINT may have have completed a currently executing request
-        // but we may still have other pending requests. xhci_reset_dequeue_ptr_locked()
-        // will set the dequeue pointer after the last completed request.
-        list_for_every_entry_safe(&ep->pending_reqs, req, temp, usb_request_t, node) {
-            list_delete(&req->node);
-            req->response.status = ZX_ERR_CANCELED;
-            req->response.actual = 0;
-            list_add_head(&completed_reqs, &req->node);
-        }
-
-        status = xhci_reset_dequeue_ptr_locked(xhci, slot_id, ep_index);
-        if (status == ZX_OK) {
-            ep->state = EP_STATE_RUNNING;
-        }
-    }
-
-    // elements of the queued_reqs list can simply be removed and completed.
-    list_for_every_entry_safe(&ep->queued_reqs, req, temp, usb_request_t, node) {
-        list_delete(&req->node);
-        req->response.status = ZX_ERR_CANCELED;
-        req->response.actual = 0;
-        list_add_head(&completed_reqs, &req->node);
-    }
-
-    mtx_unlock(&ep->lock);
-
-    // call complete callbacks out of the lock
-    while ((req = list_remove_head_type(&completed_reqs, usb_request_t, node)) != NULL) {
-        usb_request_complete(req, req->response.status, req->response.actual);
-    }
-
-    return status;
 }
 
 static void xhci_control_complete(usb_request_t* req, void* cookie) {

@@ -22,12 +22,20 @@ typedef struct {
         ENUMERATE_DEVICE,
         DISCONNECT_DEVICE,
         START_ROOT_HUBS,
+        RESET_ENDPOINT,
+        CANCEL_TRANSFERS,
         STOP_THREAD,
     } command;
     list_node_t node;
     uint32_t hub_address;
     uint32_t port;
     usb_speed_t speed;
+
+    // for RESET_ENDPOINT and CANCEL_TRANSFERS
+    uint32_t slot_id;
+    uint8_t ep_address;
+    completion_t* completion;
+    zx_status_t* command_status;
 } xhci_device_command_t;
 
 static uint32_t xhci_get_route_string(xhci_t* xhci, uint32_t hub_address, uint32_t port) {
@@ -275,7 +283,7 @@ static zx_status_t xhci_handle_enumerate_device(xhci_t* xhci, uint32_t hub_addre
         result = xhci_get_descriptor(xhci, slot_id, USB_TYPE_STANDARD, USB_DT_DEVICE << 8, 0,
                                      &device_descriptor, 8);
         if (result == ZX_ERR_IO_REFUSED) {
-            xhci_reset_endpoint(xhci, slot_id, 0);
+//!!!!fixme            xhci_reset_endpoint(xhci, slot_id, 0);
         } else {
             break;
         }
@@ -444,6 +452,206 @@ static zx_status_t xhci_handle_disconnect_device(xhci_t* xhci, uint32_t hub_addr
     return ZX_OK;
 }
 
+// This resets the transfer ring's dequeue pointer just past the last completed transfer.
+// This can only be called when the endpoint is stopped and we are locked on ep->lock.
+static zx_status_t xhci_reset_dequeue_ptr_locked(xhci_t* xhci, uint32_t slot_id,
+                                                 uint32_t ep_index) {
+    xhci_slot_t* slot = &xhci->slots[slot_id];
+    xhci_endpoint_t* ep = &slot->eps[ep_index];
+    xhci_transfer_ring_t* transfer_ring = &ep->transfer_ring;
+
+    xhci_sync_command_t command;
+    xhci_sync_command_init(&command);
+    uint64_t ptr = xhci_transfer_ring_current_phys(transfer_ring);
+    ptr |= transfer_ring->pcs;
+    // command expects device context index, so increment ep_index by 1
+    uint32_t control = (slot_id << TRB_SLOT_ID_START) |
+                        ((ep_index + 1) << TRB_ENDPOINT_ID_START);
+    xhci_post_command(xhci, TRB_CMD_SET_TR_DEQUEUE, ptr, control, &command.context);
+    int cc = xhci_sync_command_wait(&command);
+    if (cc != TRB_CC_SUCCESS) {
+        zxlogf(ERROR, "TRB_CMD_SET_TR_DEQUEUE failed cc: %d\n", cc);
+        return ZX_ERR_INTERNAL;
+    }
+    transfer_ring->dequeue_ptr = transfer_ring->current;
+
+    return ZX_OK;
+}
+
+zx_status_t xhci_handle_reset_endpoint(xhci_t* xhci, uint32_t slot_id, uint32_t ep_index) {
+    xhci_slot_t* slot = &xhci->slots[slot_id];
+    xhci_endpoint_t* ep = &slot->eps[ep_index];
+    usb_request_t* req;
+
+    // Recover from Halted and Error conditions. See section 4.8.3 of the XHCI spec.
+
+    mtx_lock(&ep->lock);
+
+    if (ep->state != EP_STATE_HALTED) {
+        mtx_unlock(&ep->lock);
+        return ZX_OK;
+    }
+
+    int ep_ctx_state = xhci_get_ep_ctx_state(slot, ep);
+    zxlogf(TRACE, "xhci_reset_endpoint %d %d ep_ctx_state %d\n", slot_id, ep_index, ep_ctx_state);
+
+    if (ep_ctx_state == EP_CTX_STATE_STOPPED || ep_ctx_state == EP_CTX_STATE_RUNNING) {
+        ep->state = EP_STATE_RUNNING;
+        mtx_unlock(&ep->lock);
+        return ZX_OK;
+    }
+    if (ep_ctx_state == EP_CTX_STATE_HALTED) {
+        // reset the endpoint to move from Halted to Stopped state
+        xhci_sync_command_t command;
+        xhci_sync_command_init(&command);
+        // command expects device context index, so increment ep_index by 1
+        uint32_t control = (slot_id << TRB_SLOT_ID_START) |
+                            ((ep_index + 1) << TRB_ENDPOINT_ID_START);
+        xhci_post_command(xhci, TRB_CMD_RESET_ENDPOINT, 0, control, &command.context);
+        int cc = xhci_sync_command_wait(&command);
+        if (cc != TRB_CC_SUCCESS) {
+            zxlogf(ERROR, "xhci_reset_endpoint: TRB_CMD_RESET_ENDPOINT failed cc: %d\n", cc);
+            mtx_unlock(&ep->lock);
+            return ZX_ERR_INTERNAL;
+        }
+    }
+
+    // resetting the dequeue pointer gets us out of ERROR state, and is also necessary
+    // after TRB_CMD_RESET_ENDPOINT.
+    if (ep_ctx_state == EP_CTX_STATE_ERROR || ep_ctx_state == EP_CTX_STATE_HALTED) {
+        // move transfer ring's dequeue pointer passed the failed transaction
+        zx_status_t status = xhci_reset_dequeue_ptr_locked(xhci, slot_id, ep_index);
+        if (status != ZX_OK) {
+            mtx_unlock(&ep->lock);
+            return status;
+        }
+    }
+
+    // xhci_reset_dequeue_ptr_locked will skip past all pending transactions,
+    // so move them all to the queued list so they will be requeued
+    // Completed these with ZX_ERR_CANCELED out of the lock.
+    // Remove from tail and add to head to preserve the ordering
+    while ((req = list_remove_tail_type(&ep->pending_reqs, usb_request_t, node)) != NULL) {
+        list_add_head(&ep->queued_reqs, &req->node);
+    }
+
+    ep_ctx_state = xhci_get_ep_ctx_state(slot, ep);
+    zx_status_t status;
+    switch (ep_ctx_state) {
+    case EP_CTX_STATE_DISABLED:
+        ep->state = EP_STATE_DEAD;
+        status = ZX_ERR_IO_NOT_PRESENT;
+        break;
+    case EP_CTX_STATE_RUNNING:
+    case EP_CTX_STATE_STOPPED:
+        ep->state = EP_STATE_RUNNING;
+        status = ZX_OK;
+        break;
+    case EP_CTX_STATE_HALTED:
+    case EP_CTX_STATE_ERROR:
+        ep->state = EP_STATE_HALTED;
+        status = ZX_ERR_IO_REFUSED;
+        break;
+    default:
+        ep->state = EP_STATE_HALTED;
+        status = ZX_ERR_INTERNAL;
+        break;
+    }
+
+    list_node_t completed_reqs = LIST_INITIAL_VALUE(completed_reqs);
+    if (ep->state == EP_STATE_RUNNING) {
+        // start processing transactions again
+        xhci_process_transactions_locked(xhci, slot, ep_index, &completed_reqs);
+    }
+
+    mtx_unlock(&ep->lock);
+
+    // call complete callbacks out of the lock
+    while ((req = list_remove_head_type(&completed_reqs, usb_request_t, node)) != NULL) {
+        usb_request_complete(req, req->response.status, req->response.actual);
+    }
+
+    return status;
+}
+
+zx_status_t xhci_handle_cancel_transfers(xhci_t* xhci, uint32_t slot_id, uint32_t ep_index) {
+    zxlogf(TRACE, "xhci_cancel_transfers slot_id: %d ep_index: %d\n", slot_id, ep_index);
+
+    if (slot_id < 1 || slot_id > xhci->max_slots) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    if (ep_index >= XHCI_NUM_EPS) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    xhci_slot_t* slot = &xhci->slots[slot_id];
+    xhci_endpoint_t* ep = &slot->eps[ep_index];
+    list_node_t completed_reqs = LIST_INITIAL_VALUE(completed_reqs);
+    usb_request_t* req;
+    usb_request_t* temp;
+    zx_status_t status = ZX_OK;
+
+    mtx_lock(&ep->lock);
+
+    if (!list_is_empty(&ep->pending_reqs)) {
+        // stop the endpoint and remove transactions that have already been queued
+        // in the transfer ring
+        ep->state = EP_STATE_PAUSED;
+
+        xhci_sync_command_t command;
+        xhci_sync_command_init(&command);
+        // command expects device context index, so increment ep_index by 1
+        uint32_t control = (slot_id << TRB_SLOT_ID_START) |
+                           ((ep_index + 1) << TRB_ENDPOINT_ID_START);
+        xhci_post_command(xhci, TRB_CMD_STOP_ENDPOINT, 0, control, &command.context);
+
+        // We can't block on command completion while holding the lock.
+        // It is safe to unlock here because no additional transactions will be
+        // queued on the endpoint when ep->state is EP_STATE_PAUSED.
+        mtx_unlock(&ep->lock);
+        int cc = xhci_sync_command_wait(&command);
+        if (cc != TRB_CC_SUCCESS) {
+            // TRB_CC_CONTEXT_STATE_ERROR is normal here in the case of a disconnected device,
+            // since by then the endpoint would already be in error state.
+            zxlogf(ERROR, "xhci_cancel_transfers: TRB_CMD_STOP_ENDPOINT failed cc: %d\n", cc);
+            return ZX_ERR_INTERNAL;
+        }
+        mtx_lock(&ep->lock);
+
+        // TRB_CMD_STOP_ENDPOINT may have have completed a currently executing request
+        // but we may still have other pending requests. xhci_reset_dequeue_ptr_locked()
+        // will set the dequeue pointer after the last completed request.
+        list_for_every_entry_safe(&ep->pending_reqs, req, temp, usb_request_t, node) {
+            list_delete(&req->node);
+            req->response.status = ZX_ERR_CANCELED;
+            req->response.actual = 0;
+            list_add_head(&completed_reqs, &req->node);
+        }
+
+        status = xhci_reset_dequeue_ptr_locked(xhci, slot_id, ep_index);
+        if (status == ZX_OK) {
+            ep->state = EP_STATE_RUNNING;
+        }
+    }
+
+    // elements of the queued_reqs list can simply be removed and completed.
+    list_for_every_entry_safe(&ep->queued_reqs, req, temp, usb_request_t, node) {
+        list_delete(&req->node);
+        req->response.status = ZX_ERR_CANCELED;
+        req->response.actual = 0;
+        list_add_head(&completed_reqs, &req->node);
+    }
+
+    mtx_unlock(&ep->lock);
+
+    // call complete callbacks out of the lock
+    while ((req = list_remove_head_type(&completed_reqs, usb_request_t, node)) != NULL) {
+        usb_request_complete(req, req->response.status, req->response.actual);
+    }
+
+    return status;
+}
+
 static int xhci_device_thread(void* arg) {
     xhci_t* xhci = (xhci_t*)arg;
 
@@ -477,6 +685,14 @@ static int xhci_device_thread(void* arg) {
         case START_ROOT_HUBS:
             xhci_start_root_hubs(xhci);
             break;
+        case RESET_ENDPOINT:
+            *command->command_status = xhci_handle_reset_endpoint(xhci, command->slot_id, command->ep_address);
+            completion_signal(command->completion);
+            break;
+        case CANCEL_TRANSFERS:
+            *command->command_status = xhci_handle_cancel_transfers(xhci, command->slot_id, command->ep_address);
+            completion_signal(command->completion);
+            break;
         case STOP_THREAD:
             return 0;
         }
@@ -495,6 +711,27 @@ static zx_status_t xhci_queue_command(xhci_t* xhci, int command, uint32_t hub_ad
     device_command->hub_address = hub_address;
     device_command->port = port;
     device_command->speed = speed;
+
+    mtx_lock(&xhci->command_queue_mutex);
+    list_add_tail(&xhci->command_queue, &device_command->node);
+    completion_signal(&xhci->command_queue_completion);
+    mtx_unlock(&xhci->command_queue_mutex);
+
+    return ZX_OK;
+}
+
+static zx_status_t xhci_queue_ep_command(xhci_t* xhci, int command, uint32_t slot_id,
+                                         uint8_t ep_address, completion_t* completion,
+                                         zx_status_t* command_status) {
+    xhci_device_command_t* device_command = calloc(1, sizeof(xhci_device_command_t));
+    if (!device_command) {
+        return ZX_ERR_NO_MEMORY;
+    }
+    device_command->command = command;
+    device_command->slot_id = slot_id;
+    device_command->ep_address = ep_address;
+    device_command->completion = completion;
+    device_command->command_status = command_status;
 
     mtx_lock(&xhci->command_queue_mutex);
     list_add_tail(&xhci->command_queue, &device_command->node);
@@ -743,4 +980,38 @@ zx_status_t xhci_configure_hub(xhci_t* xhci, uint32_t slot_id, usb_speed_t speed
     }
 
     return ZX_OK;
+}
+
+zx_status_t xhci_reset_endpoint(xhci_t* xhci, uint32_t slot_id, uint32_t ep_index) {
+    completion_t completion = COMPLETION_INIT;
+    zx_status_t command_status;
+
+    zx_status_t status = xhci_queue_ep_command(xhci, RESET_ENDPOINT, slot_id, ep_index, &completion,
+                                               &command_status);
+    if (status != ZX_OK) {
+        return status;
+    }
+    status = completion_wait(&completion, ZX_TIME_INFINITE);
+     if (status != ZX_OK) {
+        return status;
+    }
+
+    return command_status;
+}
+
+zx_status_t xhci_cancel_transfers(xhci_t* xhci, uint32_t slot_id, uint32_t ep_index) {
+    completion_t completion = COMPLETION_INIT;
+    zx_status_t command_status;
+
+    zx_status_t status = xhci_queue_ep_command(xhci, CANCEL_TRANSFERS, slot_id, ep_index,
+                                               &completion, &command_status);
+    if (status != ZX_OK) {
+        return status;
+    }
+    status = completion_wait(&completion, ZX_TIME_INFINITE);
+     if (status != ZX_OK) {
+        return status;
+    }
+
+    return command_status;
 }
