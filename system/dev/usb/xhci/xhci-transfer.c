@@ -20,7 +20,7 @@ static void print_trb(xhci_t* xhci, xhci_transfer_ring_t* ring, xhci_trb_t* trb)
     uint32_t* ptr = (uint32_t *)trb;
     uint64_t paddr = io_buffer_phys(&ring->buffer) + index * sizeof(xhci_trb_t);
 
-    zxlogf(LSPEW, "trb[%03d] %p: %08X %08X %08X %08X\n", index, (void *)paddr, ptr[0], ptr[1], ptr[2], ptr[3]);
+    zxlogf(INFO, "trb[%03d] %p: %08X %08X %08X %08X\n", index, (void *)paddr, ptr[0], ptr[1], ptr[2], ptr[3]);
 }
 
 // reads a range of bits from an integer
@@ -114,7 +114,7 @@ static zx_status_t xhci_continue_transfer_locked(xhci_t* xhci, xhci_slot_t* slot
         } else {
             trb_set_control(trb, TRB_TRANSFER_NORMAL, control_bits);
         }
-        if (driver_get_log_flags() & DDK_LOG_SPEW) print_trb(xhci, ring, trb);
+        if (driver_get_log_flags() & DDK_LOG_INFO) print_trb(xhci, ring, trb);
         xhci_increment_ring(ring);
         free_trbs--;
 
@@ -142,7 +142,7 @@ static zx_status_t xhci_continue_transfer_locked(xhci_t* xhci, xhci_slot_t* slot
         XHCI_SET_BITS32(&trb->status, XFER_TRB_INTR_TARGET_START, XFER_TRB_INTR_TARGET_BITS,
                         interrupter_target);
         trb_set_control(trb, TRB_TRANSFER_EVENT_DATA, XFER_TRB_IOC);
-        if (driver_get_log_flags() & DDK_LOG_SPEW) print_trb(xhci, ring, trb);
+        if (driver_get_log_flags() & DDK_LOG_INFO) print_trb(xhci, ring, trb);
         xhci_increment_ring(ring);
         free_trbs--;
         state->needs_data_event = false;
@@ -166,7 +166,7 @@ static zx_status_t xhci_continue_transfer_locked(xhci_t* xhci, xhci_slot_t* slot
             control_bits |= TRB_CHAIN;
         }
         trb_set_control(trb, TRB_TRANSFER_STATUS, control_bits);
-        if (driver_get_log_flags() & DDK_LOG_SPEW) print_trb(xhci, ring, trb);
+        if (driver_get_log_flags() & DDK_LOG_INFO) print_trb(xhci, ring, trb);
         xhci_increment_ring(ring);
         free_trbs--;
         state->needs_status = false;
@@ -186,7 +186,7 @@ static zx_status_t xhci_continue_transfer_locked(xhci_t* xhci, xhci_slot_t* slot
         XHCI_SET_BITS32(&trb->status, XFER_TRB_INTR_TARGET_START, XFER_TRB_INTR_TARGET_BITS,
                         interrupter_target);
         trb_set_control(trb, TRB_TRANSFER_EVENT_DATA, XFER_TRB_IOC);
-        if (driver_get_log_flags() & DDK_LOG_SPEW) print_trb(xhci, ring, trb);
+        if (driver_get_log_flags() & DDK_LOG_INFO) print_trb(xhci, ring, trb);
         xhci_increment_ring(ring);
         free_trbs--;
         state->needs_data_event = false;
@@ -275,7 +275,7 @@ static zx_status_t xhci_start_transfer_locked(xhci_t* xhci, xhci_slot_t* slot, u
                             (state->direction == USB_DIR_IN ? XFER_TRB_TRT_IN : XFER_TRB_TRT_OUT));
         control_bits |= XFER_TRB_IDT; // immediate data flag
         trb_set_control(trb, TRB_TRANSFER_SETUP, control_bits);
-        if (driver_get_log_flags() & DDK_LOG_SPEW) print_trb(xhci, ring, trb);
+        if (driver_get_log_flags() & DDK_LOG_INFO) print_trb(xhci, ring, trb);
         xhci_increment_ring(ring);
     }
 
@@ -336,7 +336,7 @@ zx_status_t xhci_queue_transfer(xhci_t* xhci, usb_request_t* req) {
     uint8_t ep_index = xhci_endpoint_index(req->header.ep_address);
     __UNUSED usb_setup_t* setup = (ep_index == 0 ? &req->setup : NULL);
 
-    zxlogf(LSPEW, "xhci_queue_transfer slot_id: %d setup: %p ep_index: %d length: %lu\n",
+    zxlogf(INFO, "xhci_queue_transfer slot_id: %d setup: %p ep_index: %d length: %lu\n",
             slot_id, setup, ep_index, req->header.length);
 
     int rh_index = xhci_get_root_hub_index(xhci, slot_id);
@@ -472,7 +472,7 @@ zx_status_t xhci_get_descriptor(xhci_t* xhci, uint32_t slot_id, uint8_t type, ui
 }
 
 void xhci_handle_transfer_event(xhci_t* xhci, xhci_trb_t* trb) {
-    zxlogf(LTRACE, "xhci_handle_transfer_event: %08X %08X %08X %08X\n",
+    zxlogf(INFO, "xhci_handle_transfer_event: %08X %08X %08X %08X\n",
             ((uint32_t*)trb)[0], ((uint32_t*)trb)[1], ((uint32_t*)trb)[2], ((uint32_t*)trb)[3]);
 
     uint32_t control = XHCI_READ32(&trb->control);
@@ -581,7 +581,9 @@ void xhci_handle_transfer_event(xhci_t* xhci, xhci_trb_t* trb) {
     if (!req) {
         // no req expected for this condition code
         if (cc != TRB_CC_STOPPED_LENGTH_INVALID) {
-            zxlogf(ERROR, "xhci_handle_transfer_event: unable to find request to complete!\n");
+            zxlogf(ERROR, "xhci_handle_transfer_event: unable to find request to complete! "
+                          "%08X %08X %08X %08X\n",
+                ((uint32_t*)trb)[0], ((uint32_t*)trb)[1], ((uint32_t*)trb)[2], ((uint32_t*)trb)[3]);
         }
         mtx_unlock(&ep->lock);
         return;

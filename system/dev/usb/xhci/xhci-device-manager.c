@@ -483,6 +483,8 @@ zx_status_t xhci_handle_reset_endpoint(xhci_t* xhci, uint32_t slot_id, uint32_t 
     xhci_endpoint_t* ep = &slot->eps[ep_index];
     usb_request_t* req;
 
+printf("xhci_handle_reset_endpoint\n");
+
     // Recover from Halted and Error conditions. See section 4.8.3 of the XHCI spec.
 
     mtx_lock(&ep->lock);
@@ -507,8 +509,11 @@ zx_status_t xhci_handle_reset_endpoint(xhci_t* xhci, uint32_t slot_id, uint32_t 
         // command expects device context index, so increment ep_index by 1
         uint32_t control = (slot_id << TRB_SLOT_ID_START) |
                             ((ep_index + 1) << TRB_ENDPOINT_ID_START);
+
+printf("TRB_CMD_RESET_ENDPOINT\n");
         xhci_post_command(xhci, TRB_CMD_RESET_ENDPOINT, 0, control, &command.context);
         int cc = xhci_sync_command_wait(&command);
+printf("TRB_CMD_RESET_ENDPOINT done\n");
         if (cc != TRB_CC_SUCCESS) {
             zxlogf(ERROR, "xhci_reset_endpoint: TRB_CMD_RESET_ENDPOINT failed cc: %d\n", cc);
             mtx_unlock(&ep->lock);
@@ -520,7 +525,9 @@ zx_status_t xhci_handle_reset_endpoint(xhci_t* xhci, uint32_t slot_id, uint32_t 
     // after TRB_CMD_RESET_ENDPOINT.
     if (ep_ctx_state == EP_CTX_STATE_ERROR || ep_ctx_state == EP_CTX_STATE_HALTED) {
         // move transfer ring's dequeue pointer passed the failed transaction
+printf("xhci_reset_dequeue_ptr_locked\n");
         zx_status_t status = xhci_reset_dequeue_ptr_locked(xhci, slot_id, ep_index);
+printf("xhci_reset_dequeue_ptr_locked done\n");
         if (status != ZX_OK) {
             mtx_unlock(&ep->lock);
             return status;
