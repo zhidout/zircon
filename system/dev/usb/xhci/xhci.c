@@ -532,7 +532,7 @@ void xhci_post_command(xhci_t* xhci, uint32_t command, uint64_t ptr, uint32_t co
 static void xhci_handle_command_complete_event(xhci_t* xhci, xhci_trb_t* event_trb) {
     xhci_trb_t* command_trb = xhci_read_trb_ptr(&xhci->command_ring, event_trb);
     uint32_t cc = XHCI_GET_BITS32(&event_trb->status, EVT_TRB_CC_START, EVT_TRB_CC_BITS);
-    zxlogf(TRACE, "xhci_handle_command_complete_event slot_id: %d command: %d cc: %d\n",
+    zxlogf(INFO, "xhci_handle_command_complete_event slot_id: %d command: %d cc: %d\n",
             (event_trb->control >> TRB_SLOT_ID_START), trb_get_type(command_trb), cc);
 
     int index = command_trb - xhci->command_ring.start;

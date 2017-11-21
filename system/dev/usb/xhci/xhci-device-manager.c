@@ -27,6 +27,7 @@ typedef struct {
     list_node_t node;
     uint32_t hub_address;
     uint32_t port;
+    uint32_t slot_id;
     usb_speed_t speed;
 } xhci_device_command_t;
 
@@ -383,65 +384,10 @@ static zx_status_t xhci_stop_endpoint(xhci_t* xhci, uint32_t slot_id, int ep_ind
     return ZX_OK;
 }
 
-static zx_status_t xhci_handle_disconnect_device(xhci_t* xhci, uint32_t hub_address, uint32_t port) {
-    zxlogf(TRACE, "xhci_handle_disconnect_device\n");
-    xhci_slot_t* slot = NULL;
-    uint32_t slot_id;
-
-    int rh_index = xhci_get_root_hub_index(xhci, hub_address);
-    if (rh_index >= 0) {
-        // For virtual root hub devices, real hub_address is 0
-        hub_address = 0;
-        // convert virtual root hub port number to real port number
-        port = xhci->root_hubs[rh_index].port_map[port - 1] + 1;
-    }
-
-    for (slot_id = 1; slot_id <= xhci->max_slots; slot_id++) {
-        xhci_slot_t* test_slot = &xhci->slots[slot_id];
-        if (test_slot->hub_address == hub_address && test_slot->port == port) {
-            slot = test_slot;
-            break;
-        }
-    }
-    if (!slot) {
-        zxlogf(ERROR, "slot not found in xhci_handle_disconnect_device\n");
-        return ZX_ERR_NOT_FOUND;
-    }
-
-    uint32_t drop_flags = 0;
-    for (int i = 0; i < XHCI_NUM_EPS; i++) {
-        if (slot->eps[i].state != EP_STATE_DEAD) {
-            zx_status_t status = xhci_stop_endpoint(xhci, slot_id, i, EP_STATE_DEAD,
-                                                    ZX_ERR_IO_NOT_PRESENT);
-            if (status != ZX_OK) {
-                zxlogf(ERROR, "xhci_handle_disconnect_device: xhci_stop_endpoint failed: %d\n",
-                        status);
-            }
-            drop_flags |= XHCI_ICC_EP_FLAG(i);
-         }
-    }
-
-    xhci_remove_device(xhci, slot_id);
-
-    mtx_lock(&xhci->input_context_lock);
-    xhci_input_control_context_t* icc = (xhci_input_control_context_t*)xhci->input_context;
-    zx_paddr_t icc_phys = xhci->input_context_phys;
-    memset((void*)icc, 0, xhci->context_size);
-    XHCI_WRITE32(&icc->drop_context_flags, drop_flags);
-
-    // flush icc
-    xhci_cache_flush(icc, sizeof(*icc));
-
-    zx_status_t status = xhci_send_command(xhci, TRB_CMD_CONFIGURE_EP, icc_phys,
-                                           (slot_id << TRB_SLOT_ID_START));
-    mtx_unlock(&xhci->input_context_lock);
-    if (status != ZX_OK) {
-        zxlogf(ERROR, "xhci_handle_disconnect_device: TRB_CMD_CONFIGURE_EP failed\n");
-    }
+static void xhci_handle_disconnect_device(xhci_t* xhci, uint32_t slot_id) {
+    zxlogf(INFO, "xhci_handle_disconnect_device %u\n", slot_id);
 
     xhci_disable_slot(xhci, slot_id);
-
-    return ZX_OK;
 }
 
 static int xhci_device_thread(void* arg) {
@@ -472,7 +418,7 @@ static int xhci_device_thread(void* arg) {
             xhci_handle_enumerate_device(xhci, command->hub_address, command->port, command->speed);
             break;
         case DISCONNECT_DEVICE:
-            xhci_handle_disconnect_device(xhci, command->hub_address, command->port);
+            xhci_handle_disconnect_device(xhci, command->slot_id);
             break;
         case START_ROOT_HUBS:
             xhci_start_root_hubs(xhci);
@@ -504,6 +450,22 @@ static zx_status_t xhci_queue_command(xhci_t* xhci, int command, uint32_t hub_ad
     return ZX_OK;
 }
 
+static zx_status_t xhci_queue_command_slot(xhci_t* xhci, int command, uint32_t slot_id) {
+    xhci_device_command_t* device_command = calloc(1, sizeof(xhci_device_command_t));
+    if (!device_command) {
+        return ZX_ERR_NO_MEMORY;
+    }
+    device_command->command = command;
+    device_command->slot_id = slot_id;
+
+    mtx_lock(&xhci->command_queue_mutex);
+    list_add_tail(&xhci->command_queue, &device_command->node);
+    completion_signal(&xhci->command_queue_completion);
+    mtx_unlock(&xhci->command_queue_mutex);
+
+    return ZX_OK;
+}
+
 void xhci_start_device_thread(xhci_t* xhci) {
     thrd_create_with_name(&xhci->device_thread, xhci_device_thread, xhci, "xhci_device_thread");
 }
@@ -519,7 +481,7 @@ zx_status_t xhci_enumerate_device(xhci_t* xhci, uint32_t hub_address, uint32_t p
 }
 
 zx_status_t xhci_device_disconnected(xhci_t* xhci, uint32_t hub_address, uint32_t port) {
-    zxlogf(TRACE, "xhci_device_disconnected %d %d\n", hub_address, port);
+    zxlogf(INFO, "xhci_device_disconnected %d %d\n", hub_address, port);
     mtx_lock(&xhci->command_queue_mutex);
     // check pending device list first
     xhci_device_command_t* command;
@@ -534,7 +496,40 @@ zx_status_t xhci_device_disconnected(xhci_t* xhci, uint32_t hub_address, uint32_
     }
     mtx_unlock(&xhci->command_queue_mutex);
 
-    return xhci_queue_command(xhci, DISCONNECT_DEVICE, hub_address, port, USB_SPEED_UNDEFINED);
+    xhci_slot_t* slot = NULL;
+    uint32_t slot_id;
+
+    int rh_index = xhci_get_root_hub_index(xhci, hub_address);
+    if (rh_index >= 0) {
+        // For virtual root hub devices, real hub_address is 0
+        hub_address = 0;
+        // convert virtual root hub port number to real port number
+        port = xhci->root_hubs[rh_index].port_map[port - 1] + 1;
+    }
+
+    for (slot_id = 1; slot_id <= xhci->max_slots; slot_id++) {
+        xhci_slot_t* test_slot = &xhci->slots[slot_id];
+        if (test_slot->hub_address == hub_address && test_slot->port == port) {
+            slot = test_slot;
+            break;
+        }
+    }
+    if (!slot) {
+        zxlogf(ERROR, "slot not found in xhci_handle_disconnect_device\n");
+        return ZX_ERR_NOT_FOUND;
+    }
+
+    for (int i = 0; i < XHCI_NUM_EPS; i++) {
+        xhci_endpoint_t* ep = &slot->eps[i];
+        mtx_lock(&ep->lock);
+        slot->eps[i].state = EP_STATE_DEAD;
+        mtx_unlock(&ep->lock);
+    }
+
+printf("call xhci_remove_device %u\n", slot_id);
+    xhci_remove_device(xhci, slot_id);
+
+    return xhci_queue_command_slot(xhci, DISCONNECT_DEVICE, slot_id);
 }
 
 zx_status_t xhci_queue_start_root_hubs(xhci_t* xhci) {
