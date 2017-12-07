@@ -62,7 +62,7 @@ zx_status_t InterruptEventDispatcher::Create(uint32_t vector,
 
     // Attempt to construct the dispatcher.
     fbl::AllocChecker ac;
-    InterruptEventDispatcher* disp = new (&ac) InterruptEventDispatcher(vector);
+    InterruptEventDispatcher* disp = new (&ac) InterruptEventDispatcher(vector, flags);
     if (!ac.check())
         return ZX_ERR_NO_MEMORY;
 

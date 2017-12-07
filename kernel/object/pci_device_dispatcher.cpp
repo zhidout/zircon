@@ -152,6 +152,7 @@ zx_status_t PciDeviceDispatcher::ResetDevice() {
 }
 
 zx_status_t PciDeviceDispatcher::MapInterrupt(int32_t which_irq,
+                                              bool level_triggered,
                                               fbl::RefPtr<Dispatcher>* interrupt_dispatcher,
                                               zx_rights_t* rights) {
     canary_.Assert();

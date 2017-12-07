@@ -34,12 +34,14 @@ private:
     using VectorCollection = fbl::WAVLTree<uint32_t, InterruptEventDispatcher*>;
     friend fbl::DefaultWAVLTreeTraits<InterruptEventDispatcher*>;
 
-    explicit InterruptEventDispatcher(uint32_t vector) : vector_(vector) { }
+    explicit InterruptEventDispatcher(uint32_t vector, uint32_t flags)
+        : vector_(vector), flags_(flags) { }
 
     static enum handler_return IrqHandler(void* ctx);
 
     fbl::Canary<fbl::magic("INED")> canary_;
     const uint32_t vector_;
+    const uint32_t flags_;
     fbl::WAVLTreeNodeState<InterruptEventDispatcher*> wavl_node_state_;
 
     static fbl::Mutex vectors_lock_;
