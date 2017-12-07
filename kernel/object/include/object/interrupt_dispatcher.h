@@ -29,16 +29,14 @@ public:
 
     zx_obj_type_t get_type() const final { return ZX_OBJ_TYPE_INTERRUPT; }
 
-    // Notify the system that the caller has finished processing the interrupt.
-    // Required before the handle can be waited upon again.
-    virtual zx_status_t InterruptComplete() = 0;
-
     // Signal the IRQ from non-IRQ state in response to a user-land request.
     virtual zx_status_t UserSignal() = 0;
 
-    zx_status_t WaitForInterrupt() {
-        return event_wait_deadline(&event_, ZX_TIME_INFINITE, true);
-    }
+    virtual zx_status_t Bind(uint32_t slot, uint32_t vector, uint32_t options) = 0;
+    virtual zx_status_t Unbind(uint32_t slot) = 0;
+    virtual zx_status_t WaitForInterrupt(zx_time_t deadline, uint64_t& out_slots) = 0;
+    virtual zx_status_t WaitForInterruptWithTimeStamp(zx_time_t deadline, uint32_t& out_slot,
+                                                      zx_time_t& out_timestamp) = 0;
 
     virtual void on_zero_handles() final {
         // Ensure any waiters stop waiting
@@ -56,7 +54,8 @@ protected:
         event_unsignal(&event_);
     }
 
+    event_t event_;
+
 private:
     fbl::Canary<fbl::magic("INTD")> canary_;
-    event_t event_;
 };

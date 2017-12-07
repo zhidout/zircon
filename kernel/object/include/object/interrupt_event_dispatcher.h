@@ -7,33 +7,44 @@
 #pragma once
 
 #include <zircon/types.h>
+#include <fbl/array.h>
 #include <fbl/canary.h>
 #include <fbl/mutex.h>
 #include <object/interrupt_dispatcher.h>
 #include <sys/types.h>
 
 class InterruptEventDispatcher final : public InterruptDispatcher {
+
+    struct Vector {
+        zx_time_t timestamp;
+        uint32_t flags;
+        uint32_t index;
+    };
+
 public:
-    static zx_status_t Create(uint32_t vector,
-                              uint32_t flags,
-                              fbl::RefPtr<Dispatcher>* dispatcher,
+    static zx_status_t Create(fbl::RefPtr<Dispatcher>* dispatcher,
                               zx_rights_t* rights);
 
     InterruptEventDispatcher(const InterruptDispatcher &) = delete;
     InterruptEventDispatcher& operator=(const InterruptDispatcher &) = delete;
 
     ~InterruptEventDispatcher() final;
-    zx_status_t InterruptComplete() final;
+
+    zx_status_t Bind(uint32_t slot, uint32_t vector, uint32_t options) final;
+    zx_status_t Unbind(uint32_t slot) final;
+    zx_status_t WaitForInterrupt(zx_time_t deadline, uint64_t& out_slots) final;
+    zx_status_t WaitForInterruptWithTimeStamp(zx_time_t deadline, uint32_t& out_slot,
+                                              zx_time_t& out_timestamp) final;
     zx_status_t UserSignal() final;
 
 private:
-    explicit InterruptEventDispatcher(uint32_t vector)
-            : vector_(vector),
-              handler_registered_(false) {}
+    explicit InterruptEventDispatcher()  {}
 
     static enum handler_return IrqHandler(void* ctx);
 
     fbl::Canary<fbl::magic("INED")> canary_;
-    const uint32_t vector_;
-    bool handler_registered_;
+
+    // vectors bound to this dispatcher
+    fbl::Array<Vector> vectors_ TA_GUARDED(vectors_lock_);
+    fbl::Mutex vectors_lock_;
 };
