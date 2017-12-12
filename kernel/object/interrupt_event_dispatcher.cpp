@@ -152,9 +152,7 @@ zx_status_t InterruptEventDispatcher::WaitForInterrupt(zx_time_t deadline, uint6
         unmask_interrupt(vector_);
 */
 
-    zx_status_t status = event_wait_deadline(&event_, ZX_TIME_INFINITE, true);
-
-    return status;
+    return wait(deadline, out_slots);
 }
 
 zx_status_t InterruptEventDispatcher::WaitForInterruptWithTimeStamp(zx_time_t deadline, uint32_t& out_slot,
@@ -162,7 +160,7 @@ zx_status_t InterruptEventDispatcher::WaitForInterruptWithTimeStamp(zx_time_t de
     canary_.Assert();
 
     return ZX_OK;
-}                                                               
+}
 
 zx_status_t InterruptEventDispatcher::UserSignal(uint32_t slot, zx_time_t timestamp) {
     canary_.Assert();

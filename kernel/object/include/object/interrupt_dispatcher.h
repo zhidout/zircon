@@ -48,20 +48,35 @@ protected:
     InterruptDispatcher() : signals_(0) {
         event_init(&event_, false, EVENT_FLAG_AUTOUNSIGNAL);
     }
+
+    zx_status_t wait(zx_time_t deadline, uint64_t& out_signals) {
+        while (true) {
+            uint64_t signals = signals_.exchange(0);
+            if (signals) {
+                if (signals & (1ul << ZX_INTERRUPT_CANCEL))
+                    return ZX_ERR_CANCELED;
+                out_signals = signals;
+                return ZX_OK;
+            }
+            zx_status_t status = event_wait_deadline(&event_, ZX_TIME_INFINITE, true);
+            if (status != ZX_OK)
+                return status;
+        }
+    }
+
     int signal(uint64_t signals, bool resched = false) {
         uint64_t old_signals = signals_.load();
         while (true) {
             if (signals_.compare_exchange_strong(&old_signals, old_signals | signals,
-                                                 fbl::memory_order_relaxed,
-                                                 fbl::memory_order_relaxed)) {
+                                                 fbl::memory_order_seq_cst,
+                                                 fbl::memory_order_seq_cst)) {
                 return event_signal_etc(&event_, resched, ZX_OK); 
             }
         }
     }
 
+private:
     event_t event_;
     fbl::atomic<uint64_t> signals_;
-
-private:
     fbl::Canary<fbl::magic("INTD")> canary_;
 };

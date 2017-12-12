@@ -12,6 +12,7 @@
 #include <zircon/rights.h>
 #include <fbl/alloc_checker.h>
 #include <object/pci_device_dispatcher.h>
+#include <platform.h>
 
 PciInterruptDispatcher::~PciInterruptDispatcher() {
     if (device_) {
@@ -30,6 +31,7 @@ pcie_irq_handler_retval_t PciInterruptDispatcher::IrqThunk(const PcieDevice& dev
                                                            void* ctx) {
     DEBUG_ASSERT(ctx);
     PciInterruptDispatcher* thiz = (PciInterruptDispatcher*)ctx;
+    thiz->timestamp_ = current_time();
 
     // Mask the IRQ at the PCIe hardware level if we can, and (if any threads
     // just became runable) tell the kernel to trigger a reschedule event.
@@ -86,27 +88,35 @@ zx_status_t PciInterruptDispatcher::Create(
 }
 
 zx_status_t PciInterruptDispatcher::Bind(uint32_t slot, uint32_t vector, uint32_t options) {
+    // PCI interrupt handles are automatically bound on creation and unbound on handle close
     return ZX_ERR_NOT_SUPPORTED;
 }
 
 zx_status_t PciInterruptDispatcher::Unbind(uint32_t slot) {
+    // PCI interrupt handles are automatically bound on creation and unbound on handle close
     return ZX_ERR_NOT_SUPPORTED;
 }
 
 zx_status_t PciInterruptDispatcher::WaitForInterrupt(zx_time_t deadline, uint64_t& out_slots) {
-    // TODO(voydanoff) what to put in out_slots?
     if (flags_ == (LEVEL_TRIGGERED & MASKABLE))
         device_->UnmaskIrq(irq_id_);
 
-    zx_status_t status = event_wait_deadline(&event_, deadline, true);
-
-    return status;
+    return wait(deadline, out_slots);
 }
 
 zx_status_t PciInterruptDispatcher::WaitForInterruptWithTimeStamp(zx_time_t deadline, uint32_t& out_slot,
                                                                   zx_time_t& out_timestamp) {
-    return ZX_OK;
-}                                                               
+    if (flags_ == (LEVEL_TRIGGERED & MASKABLE))
+        device_->UnmaskIrq(irq_id_);
+
+    uint64_t slots;
+    zx_status_t status = wait(deadline, slots);
+    if (status == ZX_OK) {
+        out_slot = IRQ_SLOT;
+        out_timestamp = timestamp_;
+    }
+    return status;
+}
 
 zx_status_t PciInterruptDispatcher::UserSignal(uint32_t slot, zx_time_t timestamp) {
     DEBUG_ASSERT(device_ != nullptr);

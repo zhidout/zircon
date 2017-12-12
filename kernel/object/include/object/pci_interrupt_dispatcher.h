@@ -38,6 +38,8 @@ public:
     zx_status_t UserSignal(uint32_t slot, zx_time_t timestamp) final;
 
 private:
+    static constexpr uint32_t IRQ_SLOT = 0;
+
     static pcie_irq_handler_retval_t IrqThunk(const PcieDevice& dev,
                                               uint irq_id,
                                               void* ctx);
@@ -47,6 +49,7 @@ private:
 
     const uint32_t irq_id_;
     const uint32_t flags_;
+    zx_time_t timestamp_ = 0;
     fbl::RefPtr<PcieDevice> device_;
 };
 
