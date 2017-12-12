@@ -38,7 +38,7 @@ public:
     zx_status_t UserSignal() final;
 
 private:
-    explicit InterruptEventDispatcher() {}
+    explicit InterruptEventDispatcher() : bound_slots_(0) {}
 
     static enum handler_return IrqHandler(void* ctx);
 
@@ -46,5 +46,6 @@ private:
 
     // vectors bound to this dispatcher
     fbl::Array<Vector> vectors_ TA_GUARDED(vectors_lock_);
+    uint64_t bound_slots_ TA_GUARDED(vectors_lock_);
     fbl::Mutex vectors_lock_;
 };

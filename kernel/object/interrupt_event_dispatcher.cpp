@@ -18,17 +18,52 @@
 // static
 zx_status_t InterruptEventDispatcher::Create(fbl::RefPtr<Dispatcher>* dispatcher,
                                              zx_rights_t* rights) {
+    // Attempt to construct the dispatcher.
+    fbl::AllocChecker ac;
+    InterruptEventDispatcher* disp = new (&ac) InterruptEventDispatcher();
+    if (!ac.check())
+        return ZX_ERR_NO_MEMORY;
 
+    // Hold a ref while we check to see if someone else owns this vector or not.
+    // If things go wrong, this ref will be released and the IED will get
+    // cleaned up automatically.
+    auto disp_ref = fbl::AdoptRef<Dispatcher>(disp);
+
+    // Transfer control of the new dispatcher to the creator and we are done.
+    *rights     = ZX_DEFAULT_INTERRUPT_RIGHTS;
+    *dispatcher = fbl::move(disp_ref);
+
+    return ZX_OK;
+}
+
+InterruptEventDispatcher::~InterruptEventDispatcher() {
 /*
+    // If we were successfully instantiated, then unconditionally mask our vector and
+    // clear out our handler (allowing others to  claim the vector if they desire).
+    if (handler_registered_) {
+        mask_interrupt(vector_);
+        register_int_handler(vector_, nullptr, nullptr);
+    }
+*/
+}
+
+zx_status_t InterruptEventDispatcher::Bind(uint32_t slot, uint32_t vector, uint32_t options) {
+    canary_.Assert();
+
+    if (slot >= ZX_INTERRUPT_MAX_WAIT_SLOTS)
+        return ZX_ERR_OUT_OF_RANGE;
+
     // Remap the vector if we have been asked to do so.
-    if (flags & ZX_INTERRUPT_REMAP_IRQ)
+    if (options & ZX_INTERRUPT_REMAP_IRQ)
         vector = remap_interrupt(vector);
 
+    if (!is_valid_interrupt(vector, 0))
+        return ZX_ERR_INVALID_ARGS;
 
     bool default_mode = false;
     enum interrupt_trigger_mode tm = IRQ_TRIGGER_MODE_EDGE;
     enum interrupt_polarity pol = IRQ_POLARITY_ACTIVE_LOW;
-    switch (flags & ZX_INTERRUPT_MODE_MASK) {
+    switch (options & ZX_INTERRUPT_MODE_MASK) {
         case ZX_INTERRUPT_MODE_DEFAULT:
             default_mode = true;
             break;
@@ -52,76 +87,45 @@ zx_status_t InterruptEventDispatcher::Create(fbl::RefPtr<Dispatcher>* dispatcher
             return ZX_ERR_INVALID_ARGS;
     }
 
-    // If this is not a valid interrupt vector, fail.
-    if (!is_valid_interrupt(vector, 0))
-        return ZX_ERR_INVALID_ARGS;
+    uint64_t slot_bit = 1 << slot;
+    fbl::AutoLock lock(&vectors_lock_);
+    if (bound_slots_ & slot_bit)
+        return ZX_ERR_ALREADY_BOUND;
 
-    if (interrupt_has_handler(vector)) {
-        return ZX_ERR_ALREADY_EXISTS;
-    }
-*/
-
-    // Attempt to construct the dispatcher.
-    fbl::AllocChecker ac;
-    InterruptEventDispatcher* disp = new (&ac) InterruptEventDispatcher();
-    if (!ac.check())
-        return ZX_ERR_NO_MEMORY;
-
-    // Hold a ref while we check to see if someone else owns this vector or not.
-    // If things go wrong, this ref will be released and the IED will get
-    // cleaned up automatically.
-    auto disp_ref = fbl::AdoptRef<Dispatcher>(disp);
-
-/*
-    // Attempt to add ourselves to the vector collection.
-    {
-        fbl::AutoLock lock(&global_vectors_lock_);
-        if (!global_vectors_.insert_or_find(disp))
-            return ZX_ERR_ALREADY_EXISTS;
-    }
-
-    // Looks like things went well.  Register our callback and unmask our
-    // interrupt.
     if (!default_mode) {
         zx_status_t status = configure_interrupt(vector, tm, pol);
         if (status != ZX_OK) {
             return status;
         }
     }
+
     zx_status_t status = register_int_handler(vector, IrqHandler, disp);
     if (status != ZX_OK) {
         return status;
     }
+
+    bound_slots_ |= slot_bit;
     unmask_interrupt(vector);
-    disp->handler_registered_ = true;
-*/
-
-    // Transfer control of the new dispatcher to the creator and we are done.
-    *rights     = ZX_DEFAULT_INTERRUPT_RIGHTS;
-    *dispatcher = fbl::move(disp_ref);
-
-    return ZX_OK;
-}
-
-InterruptEventDispatcher::~InterruptEventDispatcher() {
-/*
-    // If we were successfully instantiated, then unconditionally mask our vector and
-    // clear out our handler (allowing others to  claim the vector if they desire).
-    if (handler_registered_) {
-        mask_interrupt(vector_);
-        register_int_handler(vector_, nullptr, nullptr);
-    }
-*/
-}
-
-zx_status_t InterruptEventDispatcher::Bind(uint32_t slot, uint32_t vector, uint32_t options) {
-    canary_.Assert();
 
     return ZX_OK;
 }
 
 zx_status_t InterruptEventDispatcher::Unbind(uint32_t slot) {
     canary_.Assert();
+
+    if (slot >= ZX_INTERRUPT_MAX_WAIT_SLOTS)
+        return ZX_ERR_OUT_OF_RANGE;
+
+    uint64_t slot_bit = 1 << slot;
+
+    fbl::AutoLock lock(&vectors_lock_);
+    if (!(bound_slots_ & slot_bit))
+        return ZX_ERR_BAD_STATE;
+
+// BLAA BLAA
+//    mask_interrupt(vector);
+
+    bound_slots_ &= ~slot_bit;
 
     return ZX_OK;
 }
