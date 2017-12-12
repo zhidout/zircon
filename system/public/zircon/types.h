@@ -272,7 +272,6 @@ typedef uint64_t zx_off_t;
 #define ZX_INTERRUPT_MODE_LEVEL_HIGH (4u << 1)
 #define ZX_INTERRUPT_MODE_MASK       0xe
 #define ZX_INTERRUPT_MODE_LEVEL_MASK (ZX_INTERRUPT_MODE_LEVEL_LOW | ZX_INTERRUPT_MODE_LEVEL_HIGH)
-#define ZX_INTERRUPT_VIRTUAL         0x10
 
 // maximum number of vectors that can be bound to an interrupt handle
 // high bit is reserved for ZX_INTERRUPT_CANCEL

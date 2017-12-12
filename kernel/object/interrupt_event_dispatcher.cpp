@@ -87,10 +87,15 @@ zx_status_t InterruptEventDispatcher::Bind(uint32_t slot, uint32_t vector, uint3
             return ZX_ERR_INVALID_ARGS;
     }
 
-    uint64_t slot_bit = 1 << slot;
-    fbl::AutoLock lock(&vectors_lock_);
-    if (bound_slots_ & slot_bit)
-        return ZX_ERR_ALREADY_BOUND;
+    fbl::AutoLock lock(&lock_);
+
+    size_t index = interrupts_.size();
+    for (size_t i = 0; i < index; i++) {
+        Interrupt& interrupt = interrupts_[i];
+        if (interrupt.vector == vector || interrupt.slot == slot) {
+            return ZX_ERR_ALREADY_BOUND;
+        }
+    }
 
     if (!default_mode) {
         zx_status_t status = configure_interrupt(vector, tm, pol);
@@ -99,12 +104,19 @@ zx_status_t InterruptEventDispatcher::Bind(uint32_t slot, uint32_t vector, uint3
         }
     }
 
-    zx_status_t status = register_int_handler(vector, IrqHandler, disp);
+    Interrupt interrupt;
+    interrupt.dispatcher = this;
+    interrupt.timestamp = 0;
+    interrupt.flags = options;
+    interrupt.slot = slot;
+    interrupts_.push_back(interrupt);
+
+    zx_status_t status = register_int_handler(vector, IrqHandler, &interrupts_[index]);
     if (status != ZX_OK) {
+        interrupts_.erase(index);
         return status;
     }
 
-    bound_slots_ |= slot_bit;
     unmask_interrupt(vector);
 
     return ZX_OK;
@@ -116,18 +128,22 @@ zx_status_t InterruptEventDispatcher::Unbind(uint32_t slot) {
     if (slot >= ZX_INTERRUPT_MAX_WAIT_SLOTS)
         return ZX_ERR_OUT_OF_RANGE;
 
-    uint64_t slot_bit = 1 << slot;
+    fbl::AutoLock lock(&lock_);
 
-    fbl::AutoLock lock(&vectors_lock_);
-    if (!(bound_slots_ & slot_bit))
-        return ZX_ERR_BAD_STATE;
+    size_t size = interrupts_.size();
+    for (size_t i = 0; i < size; i++) {
+        Interrupt& interrupt = interrupts_[i];
+        if (interrupt.slot == slot) {
+            mask_interrupt(interrupt.vector);
+            register_int_handler(interrupt.vector, nullptr, nullptr);
 
-// BLAA BLAA
-//    mask_interrupt(vector);
+            interrupts_.erase(i);
 
-    bound_slots_ &= ~slot_bit;
+            return ZX_OK;
+        }
+    }
 
-    return ZX_OK;
+    return ZX_ERR_NOT_FOUND;
 }
 
 
@@ -162,14 +178,13 @@ zx_status_t InterruptEventDispatcher::UserSignal() {
 }
 
 enum handler_return InterruptEventDispatcher::IrqHandler(void* ctx) {
-    InterruptEventDispatcher* thiz = reinterpret_cast<InterruptEventDispatcher*>(ctx);
+    Interrupt* interrupt = reinterpret_cast<Interrupt*>(ctx);
+    InterruptEventDispatcher* thiz = interrupt->dispatcher;
 
-/*
-    if (thiz->flags_ && ZX_INTERRUPT_MODE_LEVEL_MASK)
-        mask_interrupt(thiz->vector_);
-*/
+    if (interrupt->flags && ZX_INTERRUPT_MODE_LEVEL_MASK)
+        mask_interrupt(interrupt->vector);
 
-    if (thiz->signal(1 /*FIXME*/) > 0) {
+    if (thiz->signal(1 << interrupt->slot) > 0) {
         return INT_RESCHEDULE;
     } else {
         return INT_NO_RESCHEDULE;

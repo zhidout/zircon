@@ -7,18 +7,20 @@
 #pragma once
 
 #include <zircon/types.h>
-#include <fbl/array.h>
 #include <fbl/canary.h>
 #include <fbl/mutex.h>
+#include <fbl/vector.h>
 #include <object/interrupt_dispatcher.h>
 #include <sys/types.h>
 
 class InterruptEventDispatcher final : public InterruptDispatcher {
 
-    struct Vector {
+    struct Interrupt {
+        InterruptEventDispatcher* dispatcher;
         zx_time_t timestamp;
         uint32_t flags;
-        uint32_t index;
+        uint32_t vector;
+        uint32_t slot;
     };
 
 public:
@@ -38,14 +40,13 @@ public:
     zx_status_t UserSignal() final;
 
 private:
-    explicit InterruptEventDispatcher() : bound_slots_(0) {}
+    explicit InterruptEventDispatcher() {}
 
     static enum handler_return IrqHandler(void* ctx);
 
     fbl::Canary<fbl::magic("INED")> canary_;
 
-    // vectors bound to this dispatcher
-    fbl::Array<Vector> vectors_ TA_GUARDED(vectors_lock_);
-    uint64_t bound_slots_ TA_GUARDED(vectors_lock_);
-    fbl::Mutex vectors_lock_;
+    // interrupts bound to this dispatcher
+    fbl::Vector<Interrupt> interrupts_ TA_GUARDED(lock_);
+    fbl::Mutex lock_;
 };
