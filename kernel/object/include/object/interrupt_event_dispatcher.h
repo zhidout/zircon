@@ -37,7 +37,7 @@ public:
     zx_status_t WaitForInterrupt(zx_time_t deadline, uint64_t& out_slots) final;
     zx_status_t WaitForInterruptWithTimeStamp(zx_time_t deadline, uint32_t& out_slot,
                                               zx_time_t& out_timestamp) final;
-    zx_status_t UserSignal() final;
+    zx_status_t UserSignal(uint32_t slot, zx_time_t timestamp) final;
 
 private:
     explicit InterruptEventDispatcher() {}

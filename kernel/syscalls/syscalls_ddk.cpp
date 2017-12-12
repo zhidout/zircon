@@ -164,7 +164,7 @@ zx_status_t sys_interrupt_signal(zx_handle_t handle, uint32_t slot, zx_time_t ti
     if (status != ZX_OK)
         return status;
 
-    return interrupt->UserSignal();
+    return interrupt->UserSignal(slot, timestamp);
 }
 
 zx_status_t sys_vmo_create_contiguous(zx_handle_t hrsrc, size_t size,

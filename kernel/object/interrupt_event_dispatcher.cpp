@@ -12,8 +12,7 @@
 #include <fbl/alloc_checker.h>
 #include <fbl/auto_lock.h>
 #include <fbl/mutex.h>
-
-#include <err.h>
+#include <platform.h>
 
 // static
 zx_status_t InterruptEventDispatcher::Create(fbl::RefPtr<Dispatcher>* dispatcher,
@@ -37,14 +36,12 @@ zx_status_t InterruptEventDispatcher::Create(fbl::RefPtr<Dispatcher>* dispatcher
 }
 
 InterruptEventDispatcher::~InterruptEventDispatcher() {
-/*
-    // If we were successfully instantiated, then unconditionally mask our vector and
-    // clear out our handler (allowing others to  claim the vector if they desire).
-    if (handler_registered_) {
-        mask_interrupt(vector_);
-        register_int_handler(vector_, nullptr, nullptr);
+    size_t size = interrupts_.size();
+    for (size_t i = 0; i < size; i++) {
+        Interrupt& interrupt = interrupts_[i];
+        mask_interrupt(interrupt.vector);
+        register_int_handler(interrupt.vector, nullptr, nullptr);
     }
-*/
 }
 
 zx_status_t InterruptEventDispatcher::Bind(uint32_t slot, uint32_t vector, uint32_t options) {
@@ -167,7 +164,7 @@ zx_status_t InterruptEventDispatcher::WaitForInterruptWithTimeStamp(zx_time_t de
     return ZX_OK;
 }                                                               
 
-zx_status_t InterruptEventDispatcher::UserSignal() {
+zx_status_t InterruptEventDispatcher::UserSignal(uint32_t slot, zx_time_t timestamp) {
     canary_.Assert();
 
 /*
@@ -179,6 +176,7 @@ zx_status_t InterruptEventDispatcher::UserSignal() {
 
 enum handler_return InterruptEventDispatcher::IrqHandler(void* ctx) {
     Interrupt* interrupt = reinterpret_cast<Interrupt*>(ctx);
+    interrupt->timestamp = current_time();
     InterruptEventDispatcher* thiz = interrupt->dispatcher;
 
     if (interrupt->flags && ZX_INTERRUPT_MODE_LEVEL_MASK)
