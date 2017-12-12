@@ -8,6 +8,7 @@
 
 #include <kernel/event.h>
 #include <zircon/types.h>
+#include <fbl/atomic.h>
 #include <fbl/canary.h>
 #include <object/dispatcher.h>
 #include <sys/types.h>
@@ -44,17 +45,22 @@ public:
     }
 
 protected:
-    InterruptDispatcher() {
-        event_init(&event_, false, 0);
+    InterruptDispatcher() : signals_(0) {
+        event_init(&event_, false, EVENT_FLAG_AUTOUNSIGNAL);
     }
-    int signal(bool resched = false, zx_status_t wait_result = ZX_OK) {
-        return event_signal_etc(&event_, resched, wait_result);
-    }
-    void unsignal() {
-        event_unsignal(&event_);
+    int signal(uint64_t signals, bool resched = false) {
+        uint64_t old_signals = signals_.load();
+        while (true) {
+            if (signals_.compare_exchange_strong(&old_signals, old_signals | signals,
+                                                 fbl::memory_order_relaxed,
+                                                 fbl::memory_order_relaxed)) {
+                return event_signal_etc(&event_, resched, ZX_OK); 
+            }
+        }
     }
 
     event_t event_;
+    fbl::atomic<uint64_t> signals_;
 
 private:
     fbl::Canary<fbl::magic("INTD")> canary_;

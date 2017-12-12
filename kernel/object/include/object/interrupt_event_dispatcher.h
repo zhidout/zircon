@@ -38,7 +38,7 @@ public:
     zx_status_t UserSignal() final;
 
 private:
-    explicit InterruptEventDispatcher()  {}
+    explicit InterruptEventDispatcher() {}
 
     static enum handler_return IrqHandler(void* ctx);
 

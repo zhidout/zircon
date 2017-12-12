@@ -136,7 +136,6 @@ zx_status_t InterruptEventDispatcher::WaitForInterrupt(zx_time_t deadline, uint6
 */
 
     zx_status_t status = event_wait_deadline(&event_, ZX_TIME_INFINITE, true);
-    unsignal();
 
     return status;
 }
@@ -166,7 +165,7 @@ enum handler_return InterruptEventDispatcher::IrqHandler(void* ctx) {
         mask_interrupt(thiz->vector_);
 */
 
-    if (thiz->signal() > 0) {
+    if (thiz->signal(1 /*FIXME*/) > 0) {
         return INT_RESCHEDULE;
     } else {
         return INT_NO_RESCHEDULE;

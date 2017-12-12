@@ -275,7 +275,8 @@ typedef uint64_t zx_off_t;
 #define ZX_INTERRUPT_VIRTUAL         0x10
 
 // maximum number of vectors that can be bound to an interrupt handle
-#define ZX_INTERRUPT_MAX_WAIT_SLOTS  64u
+// high bit is reserved for ZX_INTERRUPT_CANCEL
+#define ZX_INTERRUPT_MAX_WAIT_SLOTS  63u
 
 // index for cancelling an interrupt wait
 #define ZX_INTERRUPT_CANCEL         ZX_INTERRUPT_MAX_WAIT_SLOTS
