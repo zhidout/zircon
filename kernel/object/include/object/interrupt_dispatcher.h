@@ -59,8 +59,10 @@ protected:
                 return ZX_OK;
             }
             zx_status_t status = event_wait_deadline(&event_, ZX_TIME_INFINITE, true);
-            if (status != ZX_OK)
+            if (status != ZX_OK) {
+printf("event_wait_deadline got %d\n", status);
                 return status;
+            }
         }
     }
 

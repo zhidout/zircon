@@ -129,7 +129,7 @@ zx_status_t sys_interrupt_wait(zx_handle_t handle, zx_time_t deadline,
 
     uint64_t slots = 0;
     status = interrupt->WaitForInterrupt(deadline, slots);
-    if (status == ZX_OK)
+    if (status == ZX_OK && out_slots)
         status = out_slots.copy_to_user(slots);
     return status;
 }
@@ -148,9 +148,9 @@ zx_status_t sys_interrupt_wait_with_timestamp(zx_handle_t handle, zx_time_t dead
     uint32_t slot = 0;
     zx_time_t timestamp = 0;
     status = interrupt->WaitForInterruptWithTimeStamp(deadline, slot, timestamp);
-    if (status == ZX_OK)
+    if (status == ZX_OK && out_slot)
         status = out_slot.copy_to_user(slot);
-    if (status == ZX_OK)
+    if (status == ZX_OK && out_timestamp)
         status = out_timestamp.copy_to_user(timestamp);
     return status;
 }

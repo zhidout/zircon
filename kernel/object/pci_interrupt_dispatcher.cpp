@@ -119,7 +119,6 @@ zx_status_t PciInterruptDispatcher::WaitForInterruptWithTimeStamp(zx_time_t dead
 }
 
 zx_status_t PciInterruptDispatcher::UserSignal(uint32_t slot, zx_time_t timestamp) {
-    DEBUG_ASSERT(device_ != nullptr);
 
     if (flags_ & MASKABLE)
         device_->MaskIrq(irq_id_);
