@@ -123,8 +123,8 @@ zx_status_t PciInterruptDispatcher::UserSignal(uint32_t slot, zx_time_t timestam
     if (flags_ & MASKABLE)
         device_->MaskIrq(irq_id_);
 
-    signal(true, ZX_ERR_CANCELED);
-
+    timestamp_ = timestamp;
+    signal(1 << slot, true);
     return ZX_OK;
 }
 

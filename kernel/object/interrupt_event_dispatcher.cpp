@@ -143,7 +143,6 @@ zx_status_t InterruptEventDispatcher::Unbind(uint32_t slot) {
     return ZX_ERR_NOT_FOUND;
 }
 
-
 zx_status_t InterruptEventDispatcher::WaitForInterrupt(zx_time_t deadline, uint64_t& out_slots) {
     canary_.Assert();
 
@@ -168,7 +167,19 @@ zx_status_t InterruptEventDispatcher::UserSignal(uint32_t slot, zx_time_t timest
 /*
     mask_interrupt(vector_);
 */
-    signal(true, ZX_ERR_CANCELED);
+
+    if (slot != ZX_INTERRUPT_CANCEL) {
+        size_t size = interrupts_.size();
+        for (size_t i = 0; i < size; i++) {
+            Interrupt& interrupt = interrupts_[i];
+            if (interrupt.slot == slot) {
+                interrupt.timestamp = timestamp;
+                break;
+            }
+        }
+    }
+
+    signal(1 << slot, true);
     return ZX_OK;
 }
 
