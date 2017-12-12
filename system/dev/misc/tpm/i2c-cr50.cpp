@@ -47,7 +47,7 @@ zx_status_t I2cCr50Interface::Validate() {
 zx_status_t I2cCr50Interface::WaitForIrqLocked() {
     if (irq_) {
         zxlogf(TRACE, "tpm: Waiting for IRQ\n");
-        zx_status_t status = zx_interrupt_wait(irq_.get(), ZX_TIME_INFINITE, NULL);
+        zx_status_t status = zx_interrupt_wait(irq_.get(), NULL);
         if (status != ZX_OK) {
             return status;
         }

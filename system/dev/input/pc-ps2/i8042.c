@@ -507,7 +507,7 @@ static int i8042_irq_thread(void* arg) {
         return 0;
 
     for (;;) {
-        status = zx_interrupt_wait(device->irq, ZX_TIME_INFINITE, NULL);
+        status = zx_interrupt_wait(device->irq, NULL);
         if (status == ZX_OK) {
             // keep handling status on the controller until no bits are set we care about
             bool retry;

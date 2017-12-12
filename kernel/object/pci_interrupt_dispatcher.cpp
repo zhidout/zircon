@@ -97,20 +97,20 @@ zx_status_t PciInterruptDispatcher::Unbind(uint32_t slot) {
     return ZX_ERR_NOT_SUPPORTED;
 }
 
-zx_status_t PciInterruptDispatcher::WaitForInterrupt(zx_time_t deadline, uint64_t& out_slots) {
+zx_status_t PciInterruptDispatcher::WaitForInterrupt(uint64_t& out_slots) {
     if (flags_ == (LEVEL_TRIGGERED & MASKABLE))
         device_->UnmaskIrq(irq_id_);
 
-    return wait(deadline, out_slots);
+    return wait(out_slots);
 }
 
-zx_status_t PciInterruptDispatcher::WaitForInterruptWithTimeStamp(zx_time_t deadline, uint32_t& out_slot,
+zx_status_t PciInterruptDispatcher::WaitForInterruptWithTimeStamp(uint32_t& out_slot,
                                                                   zx_time_t& out_timestamp) {
     if (flags_ == (LEVEL_TRIGGERED & MASKABLE))
         device_->UnmaskIrq(irq_id_);
 
     uint64_t slots;
-    zx_status_t status = wait(deadline, slots);
+    zx_status_t status = wait(slots);
     if (status == ZX_OK) {
         out_slot = IRQ_SLOT;
         out_timestamp = timestamp_;
@@ -120,8 +120,8 @@ zx_status_t PciInterruptDispatcher::WaitForInterruptWithTimeStamp(zx_time_t dead
 
 zx_status_t PciInterruptDispatcher::UserSignal(uint32_t slot, zx_time_t timestamp) {
 
-    if (flags_ & MASKABLE)
-        device_->MaskIrq(irq_id_);
+//    if (flags_ & MASKABLE)
+//        device_->MaskIrq(irq_id_);
 
     timestamp_ = timestamp;
     signal(1 << slot, true);

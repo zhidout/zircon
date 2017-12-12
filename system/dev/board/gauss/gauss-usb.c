@@ -62,7 +62,7 @@ static int phy_irq_thread(void* arg) {
     gpio_config(&bus->gpio.proto, USB_VBUS_GPIO, GPIO_DIR_OUT);
 
     while (1) {
-        zx_status_t status = zx_interrupt_wait(bus->usb_phy_irq_handle, ZX_TIME_INFINITE, NULL);
+        zx_status_t status = zx_interrupt_wait(bus->usb_phy_irq_handle, NULL);
         if (status != ZX_OK) {
             if (status != ZX_ERR_CANCELED) {
                 zxlogf(ERROR, "phy_irq_thread: zx_interrupt_wait returned %d\n", status);

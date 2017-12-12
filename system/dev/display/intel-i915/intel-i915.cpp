@@ -64,7 +64,7 @@ namespace i915 {
 
 int Controller::IrqLoop() {
     for (;;) {
-        if (zx_interrupt_wait(irq_, ZX_TIME_INFINITE, NULL) != ZX_OK) {
+        if (zx_interrupt_wait(irq_, NULL) != ZX_OK) {
             zxlogf(TRACE, "i915: interrupt wait failed\n");
             break;
         }

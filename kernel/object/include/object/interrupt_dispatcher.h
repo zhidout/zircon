@@ -35,8 +35,8 @@ public:
 
     virtual zx_status_t Bind(uint32_t slot, uint32_t vector, uint32_t options) = 0;
     virtual zx_status_t Unbind(uint32_t slot) = 0;
-    virtual zx_status_t WaitForInterrupt(zx_time_t deadline, uint64_t& out_slots) = 0;
-    virtual zx_status_t WaitForInterruptWithTimeStamp(zx_time_t deadline, uint32_t& out_slot,
+    virtual zx_status_t WaitForInterrupt(uint64_t& out_slots) = 0;
+    virtual zx_status_t WaitForInterruptWithTimeStamp(uint32_t& out_slot,
                                                       zx_time_t& out_timestamp) = 0;
 
     virtual void on_zero_handles() final {
@@ -49,12 +49,13 @@ protected:
         event_init(&event_, false, EVENT_FLAG_AUTOUNSIGNAL);
     }
 
-    zx_status_t wait(zx_time_t deadline, uint64_t& out_signals) {
+    zx_status_t wait(uint64_t& out_signals) {
         while (true) {
             uint64_t signals = signals_.exchange(0);
             if (signals) {
-                if (signals & (1ul << ZX_INTERRUPT_CANCEL))
+                if (signals & (1ul << ZX_INTERRUPT_CANCEL)) {
                     return ZX_ERR_CANCELED;
+                }
                 out_signals = signals;
                 return ZX_OK;
             }

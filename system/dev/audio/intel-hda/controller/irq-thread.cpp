@@ -35,7 +35,7 @@ void IntelHDAController::WaitForIrqOrWakeup() {
     // we cannot currently wait with a timeout.
 
     VERBOSE_LOG("IRQ thread waiting on IRQ\n");
-    zx_interrupt_wait(irq_handle_, ZX_TIME_INFINITE, NULL);
+    zx_interrupt_wait(irq_handle_, NULL);
     VERBOSE_LOG("IRQ thread woke up\n");
 
     // Disable IRQs at the device level

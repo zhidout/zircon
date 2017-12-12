@@ -747,7 +747,7 @@ struct acpi_irq_thread_arg {
 static int acpi_irq_thread(void *arg) {
     struct acpi_irq_thread_arg *real_arg = (struct acpi_irq_thread_arg *)arg;
     while (1) {
-        zx_status_t status = zx_interrupt_wait(real_arg->irq_handle, ZX_TIME_INFINITE, NULL);
+        zx_status_t status = zx_interrupt_wait(real_arg->irq_handle, NULL);
         if (status != ZX_OK) {
             continue;
         }

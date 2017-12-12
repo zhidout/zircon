@@ -117,8 +117,7 @@ zx_status_t sys_interrupt_complete(zx_handle_t handle_value) {
     return up->GetDispatcher(handle_value, &interrupt);
 }
 
-zx_status_t sys_interrupt_wait(zx_handle_t handle, zx_time_t deadline,
-                               user_out_ptr<uint64_t> out_slots) {
+zx_status_t sys_interrupt_wait(zx_handle_t handle, user_out_ptr<uint64_t> out_slots) {
     LTRACEF("handle %x\n", handle);
 
     auto up = ProcessDispatcher::GetCurrent();
@@ -128,14 +127,13 @@ zx_status_t sys_interrupt_wait(zx_handle_t handle, zx_time_t deadline,
         return status;
 
     uint64_t slots = 0;
-    status = interrupt->WaitForInterrupt(deadline, slots);
+    status = interrupt->WaitForInterrupt(slots);
     if (status == ZX_OK && out_slots)
         status = out_slots.copy_to_user(slots);
     return status;
 }
 
-zx_status_t sys_interrupt_wait_with_timestamp(zx_handle_t handle, zx_time_t deadline,
-                                              user_out_ptr<uint32_t> out_slot,
+zx_status_t sys_interrupt_wait_with_timestamp(zx_handle_t handle, user_out_ptr<uint32_t> out_slot,
                                               user_out_ptr<zx_time_t> out_timestamp) {
     LTRACEF("handle %x\n", handle);
 
@@ -147,7 +145,7 @@ zx_status_t sys_interrupt_wait_with_timestamp(zx_handle_t handle, zx_time_t dead
 
     uint32_t slot = 0;
     zx_time_t timestamp = 0;
-    status = interrupt->WaitForInterruptWithTimeStamp(deadline, slot, timestamp);
+    status = interrupt->WaitForInterruptWithTimeStamp(slot, timestamp);
     if (status == ZX_OK && out_slot)
         status = out_slot.copy_to_user(slot);
     if (status == ZX_OK && out_timestamp)

@@ -418,7 +418,7 @@ int GaussPdmInputStream::IrqThread() {
     uint32_t last_notification_offset = 0;
 
     for (;;) {
-        status = zx_interrupt_wait(audio_device_.pdm_irq, ZX_TIME_INFINITE, NULL);
+        status = zx_interrupt_wait(audio_device_.pdm_irq, NULL);
         if (status != ZX_OK) {
             zxlogf(DEBUG1, "audio_pdm_input: interrupt error: %d.\n", status);
             break;

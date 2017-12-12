@@ -156,7 +156,7 @@ static int irq_thread(void* arg) {
     ethernet_device_t* edev = arg;
     while (1) {
         zx_status_t r;
-        if ((r = zx_interrupt_wait(edev->irqh, ZX_TIME_INFINITE, NULL)) < 0) {
+        if ((r = zx_interrupt_wait(edev->irqh, NULL)) < 0) {
             zxlogf(TRACE, "rtl8111: irq wait failed: %d\n", r);
             break;
         }

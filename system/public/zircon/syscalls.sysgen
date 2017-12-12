@@ -541,11 +541,11 @@ syscall interrupt_complete deprecated
     returns (zx_status_t);
 
 syscall interrupt_wait blocking
-    (handle: zx_handle_t, deadline: zx_time_t)
+    (handle: zx_handle_t)
     returns (zx_status_t, slots: uint64_t optional);
 
 syscall interrupt_wait_with_timestamp blocking
-    (handle: zx_handle_t, deadline: zx_time_t)
+    (handle: zx_handle_t)
     returns (zx_status_t, slot: uint32_t optional, timestamp: zx_time_t optional);
 
 syscall interrupt_signal

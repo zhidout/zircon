@@ -328,7 +328,7 @@ static int intel_serialio_i2c_irq_thread(void* arg) {
     intel_serialio_i2c_device_t* dev = (intel_serialio_i2c_device_t*)arg;
     zx_status_t status;
     for (;;) {
-        status = zx_interrupt_wait(dev->irq_handle, ZX_TIME_INFINITE, NULL);
+        status = zx_interrupt_wait(dev->irq_handle, NULL);
         if (status != ZX_OK) {
             xprintf("i2c: error waiting for interrupt: %d\n", status);
             continue;

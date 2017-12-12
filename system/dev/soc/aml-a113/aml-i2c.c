@@ -55,7 +55,7 @@ static int aml_i2c_irq_thread(void *arg) {
     zx_status_t status;
 
     while (1) {
-        status = zx_interrupt_wait(dev->irq, ZX_TIME_INFINITE, NULL);
+        status = zx_interrupt_wait(dev->irq, NULL);
         if (status != ZX_OK) {
             zxlogf(ERROR, "i2c: interrupt error\n");
             continue;

@@ -46,7 +46,7 @@ void Device::IrqWorker() {
     zxlogf(TRACE, "%s: starting irq worker\n", tag());
 
     while (backend_->irq_handle()) {
-        if ((rc = zx_interrupt_wait(backend_->irq_handle(), ZX_TIME_INFINITE, NULL)) != ZX_OK) {
+        if ((rc = zx_interrupt_wait(backend_->irq_handle(), NULL)) != ZX_OK) {
             zxlogf(SPEW, "%s: error while waiting for interrupt: %s\n",
                    tag(), zx_status_get_string(rc));
             continue;
