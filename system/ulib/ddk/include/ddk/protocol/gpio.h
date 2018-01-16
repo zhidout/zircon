@@ -37,6 +37,8 @@ typedef struct {
     zx_status_t (*config)(void* ctx, uint32_t index, gpio_config_flags_t flags);
     zx_status_t (*read)(void* ctx, uint32_t index, uint8_t* out_value);
     zx_status_t (*write)(void* ctx, uint32_t index, uint8_t value);
+    zx_status_t (*bind_interrupt)(void* ctx, uint32_t index, zx_handle_t handle, uint32_t slot);
+    zx_status_t (*unbind_interrupt)(void* ctx, uint32_t index, zx_handle_t handle);
 } gpio_protocol_ops_t;
 
 typedef struct {
@@ -58,6 +60,20 @@ static inline zx_status_t gpio_read(gpio_protocol_t* gpio, uint32_t index, uint8
 // sets the current value of the GPIO (any non-zero value maps to 1)
 static inline zx_status_t gpio_write(gpio_protocol_t* gpio, uint32_t index, uint8_t value) {
     return gpio->ops->write(gpio->ctx, index, value);
+}
+
+// Binds the interrupt for the GPIO specified by "index" to the given slot on an interupt handle.
+// Returns ZX_ERR_ALREADY_BOUND if another interrupt handle has been bound to the GPIO.
+static inline zx_status_t gpio_bind_interrupt(gpio_protocol_t* gpio, uint32_t index,
+                                              zx_handle_t handle, uint32_t slot) {
+    return gpio->ops->bind_interrupt(gpio->ctx, index, handle, slot);
+}
+
+// Binds the interrupt handle from the GPIO specified by "index".
+// Returns ZX_ERR_INVALID_ARGS if the interrupt handle is not currently bound to the GPIO.
+static inline zx_status_t gpio_unbind_interrupt(gpio_protocol_t* gpio, uint32_t index,
+                                              zx_handle_t handle) {
+    return gpio->ops->unbind_interrupt(gpio->ctx, index, handle);
 }
 
 __END_CDECLS;

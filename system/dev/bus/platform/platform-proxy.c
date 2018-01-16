@@ -32,6 +32,7 @@ typedef struct {
 
 static zx_status_t platform_dev_rpc(platform_proxy_t* proxy, pdev_req_t* req, uint32_t req_length,
                                     pdev_resp_t* resp, uint32_t resp_length,
+                                    zx_handle_t* in_handles, uint32_t in_handle_count,
                                     zx_handle_t* out_handles, uint32_t out_handle_count,
                                     uint32_t* out_data_received) {
     uint32_t resp_size, handle_count;
@@ -40,10 +41,12 @@ static zx_status_t platform_dev_rpc(platform_proxy_t* proxy, pdev_req_t* req, ui
 
     zx_channel_call_args_t args = {
         .wr_bytes = req,
+        .wr_handles = in_handles,
         .rd_bytes = resp,
-        .wr_num_bytes = req_length,
-        .rd_num_bytes = resp_length,
         .rd_handles = out_handles,
+        .wr_num_bytes = req_length,
+        .wr_num_handles = in_handle_count,
+        .rd_num_bytes = resp_length,
         .rd_num_handles = out_handle_count,
     };
     zx_status_t status = zx_channel_call(proxy->rpc_channel, 0, ZX_TIME_INFINITE, &args, &resp_size,
@@ -92,7 +95,7 @@ static zx_status_t pdev_ums_get_initial_mode(void* ctx, usb_mode_t* out_mode) {
     pdev_resp_t resp;
 
     zx_status_t status = platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0,
-                                          NULL);
+                                          NULL, 0, NULL);
     if (status != ZX_OK) {
         return status;
     }
@@ -108,7 +111,7 @@ static zx_status_t pdev_ums_set_mode(void* ctx, usb_mode_t mode) {
     };
     pdev_resp_t resp;
 
-    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, NULL);
+    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, NULL, 0, NULL);
 }
 
 usb_mode_switch_protocol_ops_t usb_mode_switch_ops = {
@@ -125,7 +128,7 @@ static zx_status_t pdev_gpio_config(void* ctx, uint32_t index, gpio_config_flags
     };
     pdev_resp_t resp;
 
-    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, NULL);
+    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, NULL, 0, NULL);
 }
 
 static zx_status_t pdev_gpio_read(void* ctx, uint32_t index, uint8_t* out_value) {
@@ -137,7 +140,7 @@ static zx_status_t pdev_gpio_read(void* ctx, uint32_t index, uint8_t* out_value)
     pdev_resp_t resp;
 
     zx_status_t status = platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0,
-                                          NULL);
+                                          NULL, 0, NULL);
     if (status != ZX_OK) {
         return status;
     }
@@ -154,13 +157,52 @@ static zx_status_t pdev_gpio_write(void* ctx, uint32_t index, uint8_t value) {
     };
     pdev_resp_t resp;
 
-    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, NULL);
+    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, NULL, 0, NULL);
+}
+
+zx_status_t pdev_gpio_bind_interrupt(void* ctx, uint32_t index, zx_handle_t handle, uint32_t slot) {
+    platform_proxy_t* proxy = ctx;
+
+    zx_status_t status = zx_handle_duplicate(handle, ZX_RIGHT_SAME_RIGHTS, &handle);
+    if (status != ZX_OK) {
+        return status;
+    }
+
+    pdev_req_t req = {
+        .op = PDEV_GPIO_BIND_INTERRUPT,
+        .index = index,
+        .interrupt_slot = slot,
+    };
+    pdev_resp_t resp;
+
+    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), &handle, 1, NULL, 0,
+                            NULL);
+}
+
+zx_status_t pdev_gpio_unbind_interrupt(void* ctx, uint32_t index, zx_handle_t handle) {
+    platform_proxy_t* proxy = ctx;
+
+    zx_status_t status = zx_handle_duplicate(handle, ZX_RIGHT_SAME_RIGHTS, &handle);
+    if (status != ZX_OK) {
+        return status;
+    }
+
+    pdev_req_t req = {
+        .op = PDEV_GPIO_UNBIND_INTERRUPT,
+        .index = index,
+    };
+    pdev_resp_t resp;
+
+    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), &handle, 1, NULL, 0,
+                            NULL);
 }
 
 static gpio_protocol_ops_t gpio_ops = {
     .config = pdev_gpio_config,
     .read = pdev_gpio_read,
     .write = pdev_gpio_write,
+    .bind_interrupt = pdev_gpio_bind_interrupt,
+    .unbind_interrupt = pdev_gpio_unbind_interrupt,
 };
 
 static zx_status_t pdev_i2c_transact(void* ctx, const void* write_buf, size_t write_length,
@@ -204,7 +246,7 @@ static zx_status_t pdev_i2c_transact(void* ctx, const void* write_buf, size_t wr
     uint32_t data_received;
     zx_status_t status = platform_dev_rpc(channel_ctx->proxy, &req.req,
                                           sizeof(req.req) + write_length, &resp.resp, sizeof(resp),
-                                          NULL, 0, &data_received);
+                                          NULL, 0, NULL, 0, &data_received);
     if (status != ZX_OK) {
         return status;
     }
@@ -228,7 +270,7 @@ static zx_status_t pdev_i2c_set_bitrate(void* ctx, uint32_t bitrate) {
     pdev_resp_t resp;
 
     return platform_dev_rpc(channel_ctx->proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0,
-                            NULL);
+                            NULL, 0, NULL);
 }
 
 static zx_status_t pdev_i2c_get_max_transfer_size(void* ctx, size_t* out_size) {
@@ -247,7 +289,8 @@ static void pdev_i2c_channel_release(void* ctx) {
     };
     pdev_resp_t resp;
 
-    platform_dev_rpc(channel_ctx->proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, NULL);
+    platform_dev_rpc(channel_ctx->proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, NULL, 0,
+                     NULL);
     free(channel_ctx);
 }
 
@@ -271,7 +314,7 @@ static zx_status_t pdev_i2c_get_channel(void* ctx, uint32_t channel_id, i2c_chan
     pdev_resp_t resp;
 
     zx_status_t status = platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0,
-                                          NULL);
+                                          NULL, 0, NULL);
     if (status == ZX_OK) {
         channel_ctx->proxy = proxy;
         channel_ctx->server_ctx = resp.i2c.server_ctx;
@@ -306,7 +349,7 @@ static zx_status_t platform_dev_map_mmio(void* ctx, uint32_t index, uint32_t cac
     zx_handle_t vmo_handle;
 
     zx_status_t status = platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp),
-                                          &vmo_handle, 1, NULL);
+                                          NULL, 0, &vmo_handle, 1, NULL);
     if (status != ZX_OK) {
         return status;
     }
@@ -349,7 +392,8 @@ static zx_status_t platform_dev_map_interrupt(void* ctx, uint32_t index, zx_hand
     };
     pdev_resp_t resp;
 
-    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), out_handle, 1, NULL);
+    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, out_handle, 1,
+                            NULL);
 }
 
 static zx_status_t platform_dev_alloc_contig_vmo(void* ctx, size_t size, uint32_t align_log2,
@@ -364,7 +408,8 @@ static zx_status_t platform_dev_alloc_contig_vmo(void* ctx, size_t size, uint32_
     };
     pdev_resp_t resp;
 
-    return platform_dev_rpc(dev, &req, sizeof(req), &resp, sizeof(resp), out_handle, 1, NULL);
+    return platform_dev_rpc(dev, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, out_handle, 1,
+                            NULL);
 }
 
 static zx_status_t platform_dev_map_contig_vmo(void* ctx, size_t size, uint32_t align_log2,
@@ -403,7 +448,8 @@ static zx_status_t platform_dev_create_interrupt_handle(void* ctx, zx_handle_t* 
     };
     pdev_resp_t resp;
 
-    return platform_dev_rpc(dev, &req, sizeof(req), &resp, sizeof(resp), out_handle, 1, NULL);
+    return platform_dev_rpc(dev, &req, sizeof(req), &resp, sizeof(resp), NULL, 0, out_handle, 1,
+                            NULL);
 
 }
 

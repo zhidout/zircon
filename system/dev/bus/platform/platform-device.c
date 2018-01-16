@@ -164,6 +164,41 @@ static zx_status_t platform_dev_gpio_write(platform_dev_t* dev, uint32_t index, 
     return gpio_write(&bus->gpio, index, value);
 }
 
+static zx_status_t platform_dev_gpio_bind_interrupt(platform_dev_t* dev, uint32_t index,
+                                                    uint32_t slot, zx_handle_t* handles,
+                                                    uint32_t num_handles) {
+    platform_bus_t* bus = dev->bus;
+    if (!bus->gpio.ops) {
+        return ZX_ERR_NOT_SUPPORTED;
+    }
+    if (index >= dev->gpio_count) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    if (num_handles != 1 || handles[0] == ZX_HANDLE_INVALID) {
+        return ZX_ERR_BAD_HANDLE;
+    }
+    index = dev->gpios[index].gpio;
+
+    return gpio_bind_interrupt(&bus->gpio, index, handles[0], slot);
+}
+
+static zx_status_t platform_dev_gpio_unbind_interrupt(platform_dev_t* dev, uint32_t index,
+                                                      zx_handle_t* handles, uint32_t num_handles) {
+    platform_bus_t* bus = dev->bus;
+    if (!bus->gpio.ops) {
+        return ZX_ERR_NOT_SUPPORTED;
+    }
+    if (index >= dev->gpio_count) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    if (num_handles != 1 || handles[0] == ZX_HANDLE_INVALID) {
+        return ZX_ERR_BAD_HANDLE;
+    }
+    index = dev->gpios[index].gpio;
+
+    return gpio_unbind_interrupt(&bus->gpio, index, handles[0]);
+}
+
 static zx_status_t platform_i2c_get_channel(platform_dev_t* dev, uint32_t index,
                                             pdev_i2c_resp_t* resp) {
     platform_bus_t* bus = dev->bus;
@@ -267,8 +302,11 @@ static zx_status_t platform_dev_rxrpc(void* ctx, zx_handle_t channel) {
     pdev_req_t* req = &req_data.req;
     pdev_resp_t resp;
     uint32_t len = sizeof(req_data);
+    zx_handle_t handles[1];
+    uint32_t num_handles;
 
-    zx_status_t status = zx_channel_read(channel, 0, &req_data, NULL, len, 0, &len, NULL);
+    zx_status_t status = zx_channel_read(channel, 0, &req_data, handles, len, countof(handles),
+                                         &len, &num_handles);
     if (status != ZX_OK) {
         zxlogf(ERROR, "platform_dev_rxrpc: zx_channel_read failed %d\n", status);
         return status;
@@ -307,6 +345,13 @@ static zx_status_t platform_dev_rxrpc(void* ctx, zx_handle_t channel) {
         break;
     case PDEV_GPIO_WRITE:
         resp.status = platform_dev_gpio_write(dev, req->index, req->gpio_value);
+        break;
+    case PDEV_GPIO_BIND_INTERRUPT:
+        resp.status = platform_dev_gpio_bind_interrupt(dev, req->index, req->interrupt_slot,
+                                                       handles, num_handles);
+        break;
+    case PDEV_GPIO_UNBIND_INTERRUPT:
+        resp.status = platform_dev_gpio_unbind_interrupt(dev, req->index, handles, num_handles);
         break;
     case PDEV_I2C_GET_CHANNEL:
         resp.status = platform_i2c_get_channel(dev, req->index, &resp.i2c);
