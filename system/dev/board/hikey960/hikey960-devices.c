@@ -11,7 +11,7 @@
 #include "hikey960.h"
 #include "hikey960-hw.h"
 
-// #define GPIO_TEST 1
+#define GPIO_TEST 1
 // #define I2C_TEST 1
 // #define DSI_ENABLE 1
 

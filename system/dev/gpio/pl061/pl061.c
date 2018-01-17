@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <ddk/debug.h>
 #include <hw/reg.h>
 #include <limits.h>
-#include <stdio.h>
+#include <stdlib.h>
 
 #include <gpio/pl061/pl061.h>
 
@@ -22,8 +23,60 @@
 
 #define GPIOS_PER_PAGE  8
 
+zx_status_t pl061_init(pl061_gpios_t* gpios, uint32_t gpio_start, uint32_t gpio_count,
+                       const uint32_t* irqs, uint32_t irq_count,
+                       zx_paddr_t mmio_base, size_t mmio_length, zx_handle_t resource) {
+    zx_status_t status = io_buffer_init_physical(&gpios->buffer, mmio_base, mmio_length, resource,
+                                                ZX_CACHE_POLICY_UNCACHED_DEVICE);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "pl061_init: io_buffer_init_physical failed %d\n", status);
+        return status;
+    }
+
+    gpios->client_irq_handles = calloc(gpio_count, sizeof(*gpios->client_irq_handles));
+    if (!gpios->client_irq_handles) {
+        return ZX_ERR_NO_MEMORY;
+    }
+    gpios->client_irq_slots = calloc(gpio_count, sizeof(*gpios->client_irq_slots));
+    if (!gpios->client_irq_slots) {
+        free(gpios->client_irq_handles);
+        return ZX_ERR_NO_MEMORY;
+    }
+
+    mtx_init(&gpios->lock, mtx_plain);
+    gpios->gpio_start = gpio_start;
+    gpios->gpio_count = gpio_count;
+    gpios->irqs = irqs;
+    gpios->irq_count = irq_count;
+    gpios->resource = resource;
+
+    return ZX_OK;
+}
+
+void pl061_release(pl061_gpios_t* gpios) {
+    // stop interrupt thread
+    if (gpios->irq_handle != ZX_HANDLE_INVALID) {
+        zx_interrupt_signal(gpios->irq_handle, ZX_INTERRUPT_SLOT_USER, 0);
+        thrd_join(gpios->irq_thread, NULL);
+        zx_handle_close(gpios->irq_handle);
+    }
+
+    // close all client interrupt handles
+    for (uint32_t i = 0; i < gpios->irq_count; i++) {
+        zx_handle_close(gpios->client_irq_handles[i]);
+    }
+
+    io_buffer_release(&gpios->buffer);
+    free(gpios->client_irq_handles);
+    free(gpios->client_irq_slots);
+    free(gpios);
+}
+
 static zx_status_t pl061_gpio_config(void* ctx, uint32_t index, gpio_config_flags_t flags) {
     pl061_gpios_t* gpios = ctx;
+    if (index < gpios->gpio_start || index - gpios->gpio_start >= gpios->gpio_count) {
+        return ZX_ERR_INVALID_ARGS;
+    }
     index -= gpios->gpio_start;
     volatile uint8_t* regs = io_buffer_virt(&gpios->buffer) + PAGE_SIZE * (index / GPIOS_PER_PAGE);
     uint8_t bit = 1 << (index % GPIOS_PER_PAGE);
@@ -70,6 +123,9 @@ static zx_status_t pl061_gpio_config(void* ctx, uint32_t index, gpio_config_flag
 
 static zx_status_t pl061_gpio_read(void* ctx, uint32_t index, uint8_t* out_value) {
     pl061_gpios_t* gpios = ctx;
+    if (index < gpios->gpio_start || index - gpios->gpio_start >= gpios->gpio_count) {
+        return ZX_ERR_INVALID_ARGS;
+    }
     index -= gpios->gpio_start;
     volatile uint8_t* regs = io_buffer_virt(&gpios->buffer) + PAGE_SIZE * (index / GPIOS_PER_PAGE);
     uint8_t bit = 1 << (index % GPIOS_PER_PAGE);
@@ -80,6 +136,9 @@ static zx_status_t pl061_gpio_read(void* ctx, uint32_t index, uint8_t* out_value
 
 static zx_status_t pl061_gpio_write(void* ctx, uint32_t index, uint8_t value) {
     pl061_gpios_t* gpios = ctx;
+    if (index < gpios->gpio_start || index - gpios->gpio_start >= gpios->gpio_count) {
+        return ZX_ERR_INVALID_ARGS;
+    }
     index -= gpios->gpio_start;
     volatile uint8_t* regs = io_buffer_virt(&gpios->buffer) + PAGE_SIZE * (index / GPIOS_PER_PAGE);
     uint8_t bit = 1 << (index % GPIOS_PER_PAGE);
@@ -90,11 +149,37 @@ static zx_status_t pl061_gpio_write(void* ctx, uint32_t index, uint8_t value) {
 
 zx_status_t pl061_gpio_bind_interrupt(void* ctx, uint32_t index, zx_handle_t handle,
                                       uint32_t slot) {
+    pl061_gpios_t* gpios = ctx;
+    if (index < gpios->gpio_start || index - gpios->gpio_start >= gpios->gpio_count) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    index -= gpios->gpio_start;
+    if (gpios->client_irq_handles[index] != ZX_HANDLE_INVALID) {
+        return ZX_ERR_ALREADY_BOUND;
+    }
+
+// BLAA BLAA
+
+    gpios->client_irq_handles[index] = handle;
+    gpios->client_irq_slots[index] = slot;
+
     return ZX_ERR_NOT_SUPPORTED;
 }
 
 zx_status_t pl061_gpio_unbind_interrupt(void* ctx, uint32_t index, zx_handle_t handle) {
-    return ZX_ERR_NOT_SUPPORTED;
+    pl061_gpios_t* gpios = ctx;
+    if (index < gpios->gpio_start || index - gpios->gpio_start >= gpios->gpio_count) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    index -= gpios->gpio_start;
+    if (gpios->client_irq_handles[index] != handle) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+
+    zx_handle_close(gpios->client_irq_handles[index]);
+    gpios->client_irq_handles[index] = ZX_HANDLE_INVALID;
+
+    return ZX_OK;
 }
 
 gpio_protocol_ops_t pl061_proto_ops = {

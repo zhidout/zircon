@@ -173,20 +173,14 @@ zx_status_t hi3660_gpio_init(hi3660_t* hi3660) {
         if (!gpios) {
             return ZX_ERR_NO_MEMORY;
         }
-
-        status = io_buffer_init_physical(&gpios->buffer, block->base, block->length,
-                                         resource, ZX_CACHE_POLICY_UNCACHED_DEVICE);
+        status = pl061_init(gpios, block->start_pin, block->pin_count, block->irqs,
+                            block->irq_count, block->base, block->length, resource);
         if (status != ZX_OK) {
             zxlogf(ERROR, "hi3660_gpio_init: io_buffer_init_physical failed %d\n", status);
-            free(gpios);
+            pl061_release(gpios);
             return status;
         }
 
-        mtx_init(&gpios->lock, mtx_plain);
-        gpios->gpio_start = block->start_pin;
-        gpios->gpio_count = block->pin_count;
-        gpios->irqs = block->irqs;
-        gpios->irq_count = block->irq_count;
         list_add_tail(&hi3660->gpios, &gpios->node);
     }
 
@@ -200,7 +194,6 @@ void hi3660_gpio_release(hi3660_t* hi3660) {
     pl061_gpios_t* gpios;
 
     while ((gpios = list_remove_head_type(&hi3660->gpios, pl061_gpios_t, node)) != NULL) {
-        io_buffer_release(&gpios->buffer);
-        free(gpios);
+        pl061_release(gpios);
     }
 }
