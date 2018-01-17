@@ -26,9 +26,10 @@ The parameter *options* is currently unused and must be zero.
 
 An interrupt handle is returned in the *out_handle* parameter on success.
 
-The handles will have *ZX_RIGHT_TRANSFER* (allowing them to be sent
-to another process via channel write), as well as *ZX_RIGHT_READ* and *ZX_RIGHT_WRITE*.
-In particular, interrupt handles do not have *ZX_RIGHT_DUPLICATE*.
+The handles will have *ZX_RIGHT_TRANSFER* and *ZX_RIGHT_DUPLICATE*,
+to allow them to be sent to another process via channel write.
+The *ZX_RIGHT_DUPLICATE* right should only be used to facilitate signaling
+virtual interrupts across process boundaries.
 
 ## RETURN VALUE
 
