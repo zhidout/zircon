@@ -29,6 +29,8 @@ enum {
     PDEV_GPIO_CONFIG,
     PDEV_GPIO_READ,
     PDEV_GPIO_WRITE,
+    PDEV_GPIO_BIND_INTERRUPT,
+    PDEV_GPIO_UNBIND_INTERRUPT,
 
     // ZX_PROTOCOL_I2C
     PDEV_I2C_GET_CHANNEL,
@@ -76,6 +78,7 @@ typedef struct {
         gpio_config_flags_t gpio_flags;
         uint8_t gpio_value;
         pdev_i2c_req_t i2c;
+        uint32_t interrupt_slot;
     };
 } pdev_req_t;
 
