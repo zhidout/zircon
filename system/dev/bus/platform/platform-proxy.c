@@ -396,11 +396,23 @@ static zx_status_t platform_dev_map_contig_vmo(void* ctx, size_t size, uint32_t 
     return ZX_OK;
 }
 
+static zx_status_t platform_dev_create_interrupt_handle(void* ctx, zx_handle_t* out_handle) {
+    platform_proxy_t* dev = ctx;
+    pdev_req_t req = {
+        .op = PDEV_CREATE_INTERRUPT_HANDLE,
+    };
+    pdev_resp_t resp;
+
+    return platform_dev_rpc(dev, &req, sizeof(req), &resp, sizeof(resp), out_handle, 1, NULL);
+
+}
+
 static platform_device_protocol_ops_t platform_dev_proto_ops = {
     .map_mmio = platform_dev_map_mmio,
     .map_interrupt = platform_dev_map_interrupt,
     .alloc_contig_vmo = platform_dev_alloc_contig_vmo,
     .map_contig_vmo = platform_dev_map_contig_vmo,
+    .create_interrupt_handle = platform_dev_create_interrupt_handle,
 };
 
 static zx_status_t platform_dev_get_protocol(void* ctx, uint32_t proto_id, void* out) {
