@@ -354,6 +354,13 @@ static zx_status_t a113_gpio_write(void* ctx, uint32_t index, uint8_t value) {
     return ZX_OK;
 }
 
+zx_status_t a113_gpio_bind_interrupt(void* ctx, uint32_t index, zx_handle_t handle, uint32_t slot) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+
+zx_status_t a113_gpio_unbind_interrupt(void* ctx, uint32_t index, zx_handle_t handle) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
 
 void a113_gpio_release(a113_gpio_t* gpio) {
     io_buffer_release(&gpio->periphs_ao_reg);
@@ -364,6 +371,8 @@ static gpio_protocol_ops_t gpio_ops = {
     .config = a113_gpio_config,
     .read = a113_gpio_read,
     .write = a113_gpio_write,
+    .bind_interrupt = a113_gpio_bind_interrupt,
+    .unbind_interrupt = a113_gpio_unbind_interrupt,
 };
 
 zx_status_t a113_gpio_init(a113_gpio_t* gpio) {

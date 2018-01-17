@@ -88,8 +88,19 @@ static zx_status_t pl061_gpio_write(void* ctx, uint32_t index, uint8_t value) {
     return ZX_OK;
 }
 
+zx_status_t pl061_gpio_bind_interrupt(void* ctx, uint32_t index, zx_handle_t handle,
+                                      uint32_t slot) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+
+zx_status_t pl061_gpio_unbind_interrupt(void* ctx, uint32_t index, zx_handle_t handle) {
+    return ZX_ERR_NOT_SUPPORTED;
+}
+
 gpio_protocol_ops_t pl061_proto_ops = {
     .config = pl061_gpio_config,
     .read = pl061_gpio_read,
     .write = pl061_gpio_write,
+    .bind_interrupt = pl061_gpio_bind_interrupt,
+    .unbind_interrupt = pl061_gpio_unbind_interrupt,
 };

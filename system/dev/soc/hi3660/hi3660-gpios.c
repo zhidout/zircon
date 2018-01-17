@@ -58,10 +58,31 @@ static zx_status_t hi3660_gpio_write(void* ctx, uint32_t index, uint8_t value) {
     return pl061_proto_ops.write(gpios, index, value);
 }
 
+zx_status_t hi3660_gpio_bind_interrupt(void* ctx, uint32_t index, zx_handle_t handle,
+                                       uint32_t slot) {
+    hi3660_t* hi3660 = ctx;
+    pl061_gpios_t* gpios = find_gpio(hi3660, index);
+    if (!gpios) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    return pl061_proto_ops.bind_interrupt(gpios, index, handle, slot);
+}
+
+zx_status_t hi3660_gpio_unbind_interrupt(void* ctx, uint32_t index, zx_handle_t handle) {
+    hi3660_t* hi3660 = ctx;
+    pl061_gpios_t* gpios = find_gpio(hi3660, index);
+    if (!gpios) {
+        return ZX_ERR_INVALID_ARGS;
+    }
+    return pl061_proto_ops.unbind_interrupt(gpios, index, handle);
+}
+
 static gpio_protocol_ops_t gpio_ops = {
     .config = hi3660_gpio_config,
     .read = hi3660_gpio_read,
     .write = hi3660_gpio_write,
+    .bind_interrupt = hi3660_gpio_bind_interrupt,
+    .unbind_interrupt = hi3660_gpio_unbind_interrupt,
 };
 
 typedef struct {
