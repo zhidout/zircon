@@ -95,6 +95,19 @@ static zx_status_t platform_dev_alloc_contig_vmo(platform_dev_t* dev, size_t siz
     return ZX_OK;
 }
 
+static zx_status_t platform_dev_create_interrupt_handle(platform_dev_t* dev,
+                                                        zx_handle_t* out_handle,
+                                                        uint32_t* out_handle_count) {
+    zx_status_t status = zx_interrupt_create(dev->bus->resource, 0, out_handle);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "platform_dev_create_interrupt_handle: zx_interrupt_create failed %d\n",
+               status);
+        return status;
+    }
+    *out_handle_count = 1;
+    return ZX_OK;
+}
+
 static zx_status_t platform_dev_ums_get_initial_mode(platform_dev_t* dev, usb_mode_t* out_mode) {
     platform_bus_t* bus = dev->bus;
     if (!bus->ums.ops) {
@@ -276,6 +289,9 @@ static zx_status_t platform_dev_rxrpc(void* ctx, zx_handle_t channel) {
         resp.status = platform_dev_alloc_contig_vmo(dev, req->contig_vmo.size,
                                                     req->contig_vmo.align_log2,
                                                     &handle, &handle_count);
+        break;
+    case PDEV_CREATE_INTERRUPT_HANDLE:
+        resp.status = platform_dev_create_interrupt_handle(dev, &handle, &handle_count);
         break;
     case PDEV_UMS_GET_INITIAL_MODE:
         resp.status = platform_dev_ums_get_initial_mode(dev, &resp.usb_mode);

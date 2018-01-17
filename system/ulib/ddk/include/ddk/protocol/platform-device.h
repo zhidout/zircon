@@ -19,6 +19,7 @@ typedef struct {
                                     zx_handle_t* out_handle);
     zx_status_t (*map_contig_vmo)(void* ctx, size_t size, uint32_t align_log2, uint32_t map_flags,
                                   void** out_vaddr, zx_paddr_t* out_paddr, zx_handle_t* out_handle);
+    zx_status_t (*create_interrupt_handle)(void* ctx, zx_handle_t* out_handle);
 } platform_device_protocol_ops_t;
 
 typedef struct {
@@ -52,6 +53,11 @@ static inline zx_status_t pdev_map_contig_vmo(platform_device_protocol_t* pdev, 
                                                 zx_handle_t* out_handle) {
     return pdev->ops->map_contig_vmo(pdev->ctx, size, align_log2, map_flags, out_vaddr, out_paddr,
                                      out_handle);
+}
+
+static inline zx_status_t pdev_create_interrupt_handle(platform_device_protocol_t* pdev,
+                                                       zx_handle_t* out_handle) {
+    return pdev->ops->create_interrupt_handle(pdev->ctx, out_handle);
 }
 
 // MMIO and contiguous VMO mapping helpers
