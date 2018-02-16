@@ -30,6 +30,12 @@
 
 uint32_t log_flags = LOG_ERROR | LOG_INFO;
 
+typedef struct {
+    zx_device_t* device;
+    uint32_t flags;
+    zx_handle_t reply_handle;
+} suspend_state_t;
+
 struct proxy_iostate {
     zx_device_t* dev;
     port_handler_t ph;
@@ -241,6 +247,16 @@ static void dh_send_status(zx_handle_t h, zx_status_t status) {
     zx_channel_write(h, 0, &reply, sizeof(reply), NULL, 0);
 }
 
+static int devhost_suspend_thread(void* arg) {
+    suspend_state_t* state = arg;
+
+    zx_status_t status = devhost_device_suspend(state->device, state->flags);
+    dh_send_status(state->reply_handle, status);
+    free(state);
+
+    return 0;
+}
+
 static zx_status_t dh_handle_rpc_read(zx_handle_t h, iostate_t* ios) {
     dc_msg_t msg;
     zx_handle_t hin[3];
@@ -439,11 +455,24 @@ static zx_status_t dh_handle_rpc_read(zx_handle_t h, iostate_t* ios) {
         while (device->parent != NULL) {
             device = device->parent;
         }
-        DM_LOCK();
-        r = devhost_device_suspend(device, msg.value);
-        DM_UNLOCK();
-        dh_send_status(h, r);
-        return ZX_OK;
+
+        suspend_state_t* state;
+        if ((state = calloc(sizeof(suspend_state_t), 1)) == NULL) {
+            r = ZX_ERR_NO_MEMORY;
+            break;
+        }
+        state->device = device;
+        state->flags = msg.value;
+        state->reply_handle = h;
+
+        thrd_t t;
+        int ret = thrd_create_with_name(&t, devhost_suspend_thread, state, "devhost_suspend_thread");
+        if (ret == thrd_success) {
+            thrd_detach(t);
+            return ZX_OK;
+        } else {
+            return ZX_ERR_NO_MEMORY;
+        }
 
     case DC_OP_REMOVE_DEVICE:
         if (hcount != 0) {
