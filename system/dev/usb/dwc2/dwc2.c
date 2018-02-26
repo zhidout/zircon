@@ -191,7 +191,7 @@ static void release_channel(uint ch, dwc_usb_t* dwc);
 static const uint8_t dwc_language_list[] =
     {4, /* bLength */ USB_DT_STRING, 0x09, 0x04, /* language ID */};
 static const uint8_t dwc_manufacturer_string[] = // "Zircon"
-    {18, /* bLength */ USB_DT_STRING, 'M', 0, 'a', 0, 'g', 0, 'e', 0, 'n', 0, 't', 0, 'a', 0, 0, 0};
+    {16, /* bLength */ USB_DT_STRING, 'Z', 0, 'i', 0, 'r', 0, 'c', 0, 'o', 0, 'n', 0, 0, 0};
 static const uint8_t dwc_product_string_2[] = // "USB 2.0 Root Hub"
     {
         36, /* bLength */ USB_DT_STRING, 'U', 0, 'S', 0, 'B', 0, ' ', 0, '2', 0, '.', 0, '0', 0, ' ', 0,
@@ -766,6 +766,8 @@ static usb_hci_protocol_ops_t dwc_hci_protocol = {
 };
 
 static void dwc_handle_channel_irq(uint32_t channel, dwc_usb_t* dwc) {
+printf("dwc_handle_channel_irq\n");
+
     // Save the interrupt state of this channel.
     volatile struct dwc_host_channel* chanptr = &regs->host_channels[channel];
     dwc->channel_interrupts[channel] = chanptr->interrupts;
@@ -781,6 +783,8 @@ static void dwc_handle_channel_irq(uint32_t channel, dwc_usb_t* dwc) {
 static void dwc_handle_irq(dwc_usb_t* dwc) {
     union dwc_core_interrupts interrupts = regs->core_interrupts;
 
+printf("dwc_handle_irq\n");
+
     if (interrupts.port_intr) {
         // Clear the interrupt.
         union dwc_host_port_ctrlstatus hw_status = regs->host_port_ctrlstatus;
@@ -791,29 +795,47 @@ static void dwc_handle_irq(dwc_usb_t* dwc) {
         dwc->root_port_status.wPortStatus = 0;
 
         // This device only has one port.
-        if (hw_status.connected)
+        if (hw_status.connected) {
+printf("USB_PORT_CONNECTION\n");
             dwc->root_port_status.wPortStatus |= USB_PORT_CONNECTION;
-        if (hw_status.enabled)
+        }
+        if (hw_status.enabled) {
+printf("USB_PORT_ENABLE\n");
             dwc->root_port_status.wPortStatus |= USB_PORT_ENABLE;
-        if (hw_status.suspended)
+        }
+        if (hw_status.suspended) {
+printf("USB_PORT_SUSPEND\n");
             dwc->root_port_status.wPortStatus |= USB_PORT_SUSPEND;
-        if (hw_status.overcurrent)
+        }
+        if (hw_status.overcurrent) {
+printf("USB_PORT_OVER_CURRENT\n");
             dwc->root_port_status.wPortStatus |= USB_PORT_OVER_CURRENT;
-        if (hw_status.reset)
+        }
+        if (hw_status.reset) {
+printf("USB_PORT_RESET\n");
             dwc->root_port_status.wPortStatus |= USB_PORT_RESET;
+        }
 
         if (hw_status.speed == 2) {
+printf("USB_PORT_LOW_SPEED\n");
             dwc->root_port_status.wPortStatus |= USB_PORT_LOW_SPEED;
         } else if (hw_status.speed == 0) {
+printf("USB_PORT_HIGH_SPEED\n");
             dwc->root_port_status.wPortStatus |= USB_PORT_HIGH_SPEED;
         }
 
-        if (hw_status.connected_changed)
+        if (hw_status.connected_changed) {
+printf("USB_C_PORT_CONNECTION\n");
             dwc->root_port_status.wPortChange |= USB_C_PORT_CONNECTION;
-        if (hw_status.enabled_changed)
+        }
+        if (hw_status.enabled_changed) {
+printf("USB_C_PORT_ENABLE\n");
             dwc->root_port_status.wPortChange |= USB_C_PORT_ENABLE;
-        if (hw_status.overcurrent_changed)
+        }
+        if (hw_status.overcurrent_changed) {
+printf("USB_C_PORT_OVER_CURRENT\n");
             dwc->root_port_status.wPortChange |= USB_C_PORT_OVER_CURRENT;
+        }
 
         mtx_unlock(&dwc->rh_status_mtx);
 
@@ -1691,6 +1713,9 @@ static zx_status_t create_default_device(dwc_usb_t* dwc) {
 
 // Bind is the entry point for this driver.
 static zx_status_t usb_dwc_bind(void* ctx, zx_device_t* dev) {
+
+//driver_set_log_flags(driver_get_log_flags() | DDK_LOG_TRACE);
+
     zxlogf(TRACE, "usb_dwc: bind dev = %p\n", dev);
 
     dwc_usb_t* usb_dwc = NULL;
