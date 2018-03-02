@@ -4,7 +4,6 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT
 
-
 ifeq ($(PLATFORM_VID),)
 $(error PLATFORM_VID not defined)
 endif
@@ -18,23 +17,36 @@ ifeq ($(PLATFORM_MDI_SRCS),)
 $(error PLATFORM_MDI_SRCS not defined)
 endif
 
-MDI_BIN := $(BUILDDIR)/$(PLATFORM_BOARD_NAME)-mdi.bin
-PLATFORM_ID_BIN := $(BUILDDIR)/$(PLATFORM_BOARD_NAME)-platform-id.bin
-    
+BOARD_MDI := $(BUILDDIR)/$(PLATFORM_BOARD_NAME)-mdi.bin
+BOARD_PLATFORM_ID := --vid $(PLATFORM_VID) --pid $(PLATFORM_PID) --board $(PLATFORM_BOARD_NAME)
+BOARD_BOOTDATA := $(BUILDDIR)/$(PLATFORM_BOARD_NAME)-bootdata.bin
+
+$(BOARD_MDI): PLATFORM_MDI_SRCS:=$(PLATFORM_MDI_SRCS)
+$(BOARD_BOOTDATA): BOARD_MDI:=$(BOARD_MDI)
+$(BOARD_BOOTDATA): BOARD_BOOTDATA:=$(BOARD_BOOTDATA)
+
 # rule for building MDI binary blob
-$(MDI_BIN): $(MDIGEN) $(PLATFORM_MDI_SRCS) $(MDI_INCLUDES)
+$(BOARD_MDI): $(MDIGEN) $(PLATFORM_MDI_SRCS) $(MDI_INCLUDES)
 	$(call BUILDECHO,generating $@)
 	@$(MKDIR)
 	$(NOECHO)$(MDIGEN) -o $@ $(PLATFORM_MDI_SRCS)
 
-GENERATED += $(MDI_BIN)
-EXTRA_BUILDDEPS += $(MDI_BIN)
+GENERATED += $(BOARD_MDI)
+EXTRA_BUILDDEPS += $(BOARD_MDI)
 
-# rule for building platform ID bootdata record
-$(PLATFORM_ID_BIN): $(MKBOOTFS)
+$(BOARD_BOOTDATA): $(MKBOOTFS) $(USER_BOOTDATA) $(BOARD_MDI)
 	$(call BUILDECHO,generating $@)
 	@$(MKDIR)
-	$(NOECHO)$(MKBOOTFS) -o $@ --vid $(PLATFORM_VID) --pid $(PLATFORM_PID) --board $(PLATFORM_BOARD_NAME)
+	$(NOECHO)$(MKBOOTFS) -o $@ $(BOARD_PLATFORM_ID) $(USER_BOOTDATA) $(BOARD_MDI)
 
-GENERATED += $(PLATFORM_ID_BIN)
-EXTRA_BUILDDEPS += $(PLATFORM_ID_BIN)
+GENERATED += $(BOARD_BOOTDATA)
+EXTRA_BUILDDEPS += $(BOARD_BOOTDATA)
+
+# clear variables passed in
+PLATFORM_MDI_SRCS :=
+BOARD_PLATFORM_ID :=
+
+# clear variables we set here
+BOARD_MDI :=
+BOARD_BOOTDATA :=
+BOARD_PLATFORM_ID :=
