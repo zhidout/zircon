@@ -9,4 +9,4 @@ LOCAL_DIR := $(GET_LOCAL_DIR)
 PLATFORM := generic-arm
 
 # include rules for our sub-targets
-# include $(LOCAL_DIR)/*/rules.mk
+include $(LOCAL_DIR)/*/rules.mk

@@ -11,3 +11,5 @@ PLATFORM_PID := 1   # PDEV_PID_AMLOGIC_S905
 PLATFORM_BOARD_NAME := odroid-c2
 
 MDI_SRCS := $(LOCAL_DIR)/odroidc2.mdi
+MDI_BIN := $(LOCAL_DIR)/odroidc2-mdi.bin
+include make/mdi.mk

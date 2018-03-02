@@ -12,3 +12,5 @@ PLATFORM_PID := 1   # PDEV_PID_QEMU
 PLATFORM_BOARD_NAME := qemu-virt
 
 MDI_SRCS += $(LOCAL_DIR)/qemu.mdi
+MDI_BIN := $(LOCAL_DIR)/qemu-mdi.bin
+include make/mdi.mk

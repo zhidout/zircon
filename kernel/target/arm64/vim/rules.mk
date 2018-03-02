@@ -13,3 +13,5 @@ PLATFORM_PID := 1   # PDEV_PID_VIM
 PLATFORM_BOARD_NAME := vim
 
 MDI_SRCS := $(LOCAL_DIR)/vim.mdi
+MDI_BIN := $(LOCAL_DIR)/vim-mdi.bin
+include make/mdi.mk

@@ -4,34 +4,15 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT
 
-MDI_BIN := $(BUILDDIR)/mdi.bin
 GEN_HEADER_DIR := $(BUILDDIR)/gen/global/include
 MDI_HEADER_DIR := $(GEN_HEADER_DIR)/mdi
-MDI_HEADER := $(MDI_HEADER_DIR)/mdi-defs.h
+MDI_PATH := $(BUILDDIR)/$(MDI_BIN)
 
-ifneq ($(MDI_SRCS),)
 # rule for building MDI binary blob
-$(MDI_BIN): $(MDIGEN) $(MDI_SRCS) $(MDI_INCLUDES)
+$(MDI_PATH): $(MDIGEN) $(MDI_SRCS) $(MDI_INCLUDES)
 	$(call BUILDECHO,generating $@)
 	@$(MKDIR)
 	$(NOECHO)$(MDIGEN) -o $@ $(MDI_SRCS)
 
-GENERATED += $(MDI_BIN)
-EXTRA_BUILDDEPS += $(MDI_BIN)
-ADDITIONAL_BOOTDATA_ITEMS += $(MDI_BIN)
-endif
-
-ifneq ($(MDI_INCLUDES),)
-# rule for generating MDI header file for C/C++ code
-$(MDI_HEADER): $(MDIGEN) $(MDI_INCLUDES)
-	$(call BUILDECHO,generating $@)
-	@$(MKDIR)
-	$(NOECHO)$(MDIGEN) $(MDI_INCLUDES) -h $@
-
-GENERATED += $(MDI_HEADER)
-EXTRA_BUILDDEPS += $(MDI_HEADER)
-
-# Make sure $(MDI_HEADER) is generated before it is included by any source files
-TARGET_MODDEPS += $(MDI_HEADER)
-GLOBAL_INCLUDES += $(GEN_HEADER_DIR)
-endif
+GENERATED += $(MDI_PATH)
+EXTRA_BUILDDEPS += $(MDI_PATH)

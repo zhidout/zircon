@@ -15,3 +15,5 @@ PLATFORM_PID := 1   # PDEV_PID_GAUSS
 PLATFORM_BOARD_NAME := gauss
 
 MDI_SRCS := $(LOCAL_DIR)/gauss.mdi
+MDI_BIN := $(LOCAL_DIR)/gauss-mdi.bin
+include make/mdi.mk
