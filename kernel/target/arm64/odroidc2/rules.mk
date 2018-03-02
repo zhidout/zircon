@@ -6,11 +6,8 @@
 
 LOCAL_DIR := $(GET_LOCAL_DIR)
 
-PLATFORM := generic-arm
-
 PLATFORM_VID := 3   # PDEV_VID_AMLOGIC
 PLATFORM_PID := 1   # PDEV_PID_AMLOGIC_S905
 PLATFORM_BOARD_NAME := odroid-c2
 
-# build MDI
 MDI_SRCS := $(LOCAL_DIR)/odroidc2.mdi

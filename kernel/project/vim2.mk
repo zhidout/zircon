@@ -9,3 +9,6 @@ TARGET := vim2
 include kernel/project/virtual/user.mk
 include kernel/project/virtual/test.mk
 
+foo:
+	echo foo
+

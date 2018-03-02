@@ -6,16 +6,10 @@
 
 LOCAL_DIR := $(GET_LOCAL_DIR)
 
-PLATFORM := generic-arm
-
-DEVICE_TREE := $(GET_LOCAL_DIR)/device-tree.dtb
-
 include make/kernel-images.mk
 
-PLATFORM_VID := 3   # PDEV_VID_GOOGLE
-PLATFORM_PID := 1   # PDEV_PID_GAUSS
-PLATFORM_BOARD_NAME := gauss
+PLATFORM_VID := 4   # PDEV_VID_KHADAS
+PLATFORM_PID := 1   # PDEV_PID_VIM
+PLATFORM_BOARD_NAME := vim
 
-# build MDI
-MDI_SRCS := \
-    $(LOCAL_DIR)/gauss.mdi \
+MDI_SRCS := $(LOCAL_DIR)/vim.mdi
