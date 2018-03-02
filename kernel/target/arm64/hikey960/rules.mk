@@ -9,10 +9,9 @@ LOCAL_DIR := $(GET_LOCAL_DIR)
 PLATFORM_VID := 2   # PDEV_VID_96BOARDS
 PLATFORM_PID := 1   # PDEV_PID_HIKEY960
 PLATFORM_BOARD_NAME := hikey960
+PLATFORM_MDI_SRCS := $(LOCAL_DIR)/hikey960.mdi
 
-MDI_SRCS := $(LOCAL_DIR)/hikey960.mdi
-MDI_BIN := $(LOCAL_DIR)/hikey960-mdi.bin
-include make/mdi.mk
+include make/board.mk
 
 # extra build rules for building kernel boot images
-include make/kernel-images.mk
+# include make/kernel-images.mk

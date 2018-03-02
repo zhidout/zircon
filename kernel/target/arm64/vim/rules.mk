@@ -6,12 +6,11 @@
 
 LOCAL_DIR := $(GET_LOCAL_DIR)
 
-include make/kernel-images.mk
+# include make/kernel-images.mk
 
 PLATFORM_VID := 4   # PDEV_VID_KHADAS
 PLATFORM_PID := 1   # PDEV_PID_VIM
 PLATFORM_BOARD_NAME := vim
+PLATFORM_MDI_SRCS := $(LOCAL_DIR)/vim.mdi
 
-MDI_SRCS := $(LOCAL_DIR)/vim.mdi
-MDI_BIN := $(LOCAL_DIR)/vim-mdi.bin
-include make/mdi.mk
+include make/board.mk

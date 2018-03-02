@@ -8,12 +8,11 @@ LOCAL_DIR := $(GET_LOCAL_DIR)
 
 DEVICE_TREE := $(GET_LOCAL_DIR)/device-tree.dtb
 
-include make/kernel-images.mk
+# include make/kernel-images.mk
 
 PLATFORM_VID := 3   # PDEV_VID_GOOGLE
 PLATFORM_PID := 1   # PDEV_PID_GAUSS
 PLATFORM_BOARD_NAME := gauss
+PLATFORM_MDI_SRCS := $(LOCAL_DIR)/gauss.mdi
 
-MDI_SRCS := $(LOCAL_DIR)/gauss.mdi
-MDI_BIN := $(LOCAL_DIR)/gauss-mdi.bin
-include make/mdi.mk
+include make/board.mk
