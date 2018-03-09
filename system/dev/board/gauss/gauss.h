@@ -21,6 +21,7 @@ typedef struct {
     i2c_protocol_t i2c;
     usb_mode_switch_protocol_t usb_mode_switch;
     clk_protocol_t clk;
+    zx_handle_t bti;
     io_buffer_t usb_phy;
     zx_handle_t usb_phy_irq_handle;
     thrd_t phy_irq_thread;

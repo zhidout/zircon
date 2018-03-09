@@ -15,6 +15,7 @@
 #include <ddk/device.h>
 #include <ddk/driver.h>
 #include <ddk/protocol/i2c.h>
+#include <ddk/protocol/iommu.h>
 #include <ddk/protocol/platform-defs.h>
 
 #include <zircon/assert.h>
@@ -132,16 +133,31 @@ static zx_status_t hikey960_bind(void* ctx, zx_device_t* parent) {
         return ZX_ERR_NO_MEMORY;
     }
 
-    if (device_get_protocol(parent, ZX_PROTOCOL_PLATFORM_BUS, &hikey->pbus) != ZX_OK) {
+    zx_status_t status = device_get_protocol(parent, ZX_PROTOCOL_PLATFORM_BUS, &hikey->pbus);
+    if (status != ZX_OK) {
         free(hikey);
         return ZX_ERR_NOT_SUPPORTED;
     }
+
+    // get default BTI from the dummy IOMMU implementation in the platform bus
+    iommu_protocol_t iommu;
+    status = device_get_protocol(parent, ZX_PROTOCOL_IOMMU, &iommu);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "hikey960_bind: could not get ZX_PROTOCOL_IOMMU\n");
+        goto fail;
+    }
+    status = iommu_get_bti(&iommu, 0, 0, &hikey->bti);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "hikey960_bind: iommu_get_bti failed: %d\n", status);
+        goto fail;
+    }
+
     hikey->parent = parent;
     hikey->usb_mode = USB_MODE_NONE;
 
     // TODO(voydanoff) get from platform bus driver somehow
     zx_handle_t resource = get_root_resource();
-    zx_status_t status = hi3660_init(resource, &hikey->hi3660);
+    status = hi3660_init(resource, &hikey->hi3660);
     if (status != ZX_OK) {
         zxlogf(ERROR, "hikey960_bind: hi3660_init failed %d\n", status);
         goto fail;

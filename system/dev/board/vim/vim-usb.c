@@ -52,10 +52,10 @@ static const pbus_dev_t xhci_dev = {
 zx_status_t vim_usb_init(vim_bus_t* bus) {
     zx_status_t status;
 
-    status = io_buffer_init_physical(&bus->usb_phy, 0xd0078000, 4096, get_root_resource(),
-                                     ZX_CACHE_POLICY_UNCACHED_DEVICE);
+    status = io_buffer_init_physical_with_bti(&bus->usb_phy, bus->bti, 0xd0078000, 4096,
+                                             get_root_resource(), ZX_CACHE_POLICY_UNCACHED_DEVICE);
     if (status != ZX_OK) {
-        zxlogf(ERROR, "vim_usb_init io_buffer_init_physical failed %d\n", status);
+        zxlogf(ERROR, "vim_usb_init io_buffer_init_physical_with_bti failed %d\n", status);
         return status;
     }
 

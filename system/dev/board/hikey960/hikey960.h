@@ -15,6 +15,7 @@ typedef struct {
     i2c_protocol_t i2c;
     zx_device_t* parent;
     hi3660_t* hi3660;
+    zx_handle_t bti;
     usb_mode_switch_protocol_t usb_mode_switch;
     usb_mode_t usb_mode;
 } hikey960_t;

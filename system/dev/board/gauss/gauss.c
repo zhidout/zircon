@@ -15,6 +15,7 @@
 #include <ddk/device.h>
 #include <ddk/driver.h>
 #include <ddk/protocol/platform-defs.h>
+#include <ddk/protocol/iommu.h>
 
 #include <soc/aml-common/aml-i2c.h>
 
@@ -202,14 +203,26 @@ fail:
 }
 
 static zx_status_t gauss_bus_bind(void* ctx, zx_device_t* parent) {
-    zx_status_t status;
-
     gauss_bus_t* bus = calloc(1, sizeof(gauss_bus_t));
     if (!bus) {
         return ZX_ERR_NO_MEMORY;
     }
 
-    if ((status = device_get_protocol(parent, ZX_PROTOCOL_PLATFORM_BUS, &bus->pbus)) != ZX_OK) {
+    zx_status_t status = device_get_protocol(parent, ZX_PROTOCOL_PLATFORM_BUS, &bus->pbus);
+    if (status != ZX_OK) {
+        goto fail;
+    }
+
+    // get default BTI from the dummy IOMMU implementation in the platform bus
+    iommu_protocol_t iommu;
+    status = device_get_protocol(parent, ZX_PROTOCOL_IOMMU, &iommu);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "gauss_bus_bind: could not get ZX_PROTOCOL_IOMMU\n");
+        goto fail;
+    }
+    status = iommu_get_bti(&iommu, 0, 0, &bus->bti);
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "gauss_bus_bind: iommu_get_bti failed: %d\n", status);
         goto fail;
     }
 

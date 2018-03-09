@@ -6,9 +6,9 @@
 
 #include <ddk/device.h>
 #include <ddk/io-buffer.h>
-#include <ddk/protocol/platform-bus.h>
 #include <ddk/protocol/gpio.h>
 #include <ddk/protocol/i2c.h>
+#include <ddk/protocol/platform-bus.h>
 #include <ddk/protocol/serial.h>
 
 typedef struct {
@@ -17,6 +17,7 @@ typedef struct {
     i2c_protocol_t i2c;
     serial_impl_protocol_t serial;
     zx_device_t* parent;
+    zx_handle_t bti;
     io_buffer_t usb_phy;
     uint32_t soc_pid;
 } vim_bus_t;
