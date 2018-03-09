@@ -64,6 +64,7 @@ zx_status_t BusTransactionInitiatorDispatcher::Pin(fbl::RefPtr<VmObject> vmo, ui
     zx_status_t status = PinnedMemoryObject::Create(*this, fbl::move(vmo),
                                                     offset, size, perms, &pmo);
     if (status != ZX_OK) {
+printf("PinnedMemoryObject::Create fail\n");
         return status;
     }
 

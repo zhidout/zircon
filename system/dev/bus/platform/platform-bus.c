@@ -24,7 +24,9 @@ static zx_status_t platform_bus_get_bti(void* ctx, uint32_t iommu_index, uint32_
     if (iommu_index != 0) {
         return ZX_ERR_OUT_OF_RANGE;
     }
-    return zx_bti_create(bus->dummy_iommu_handle, 0, bti_id, out_handle);
+    zx_status_t status = zx_bti_create(bus->dummy_iommu_handle, 0, bti_id, out_handle);
+    printf("dummy_iommu_handle %x out_handle %x\n", bus->dummy_iommu_handle, *out_handle);
+    return status;
 }
 
 // default IOMMU protocol to use if the board driver does not set one via pbus_set_protocol()

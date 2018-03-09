@@ -65,7 +65,14 @@ zx_status_t vim_mali_init(vim_bus_t* bus) {
     zx_status_t status = ZX_OK;
 
     io_buffer_t hiu_buffer;
+    io_buffer_t preset_buffer;
+    io_buffer_t gpu_buffer;
 
+    memset(&hiu_buffer, 0, sizeof(hiu_buffer));
+    memset(&preset_buffer, 0, sizeof(preset_buffer));
+    memset(&gpu_buffer, 0, sizeof(gpu_buffer));
+
+printf("init hiu_buffer\n");
     status = io_buffer_init_physical_with_bti(&hiu_buffer, bus->bti, S912_HIU_BASE, S912_HIU_LENGTH,
                                              get_root_resource(), ZX_CACHE_POLICY_UNCACHED_DEVICE);
     if (status != ZX_OK) {
@@ -73,7 +80,7 @@ zx_status_t vim_mali_init(vim_bus_t* bus) {
         goto done;
     }
 
-    io_buffer_t preset_buffer;
+printf("init preset_buffer\n");
     status = io_buffer_init_physical_with_bti(&preset_buffer, bus->bti, S912_PRESET_BASE,
                                               S912_PRESET_LENGTH, get_root_resource(),
                                               ZX_CACHE_POLICY_UNCACHED_DEVICE);
@@ -82,7 +89,7 @@ zx_status_t vim_mali_init(vim_bus_t* bus) {
         goto done;
     }
 
-    io_buffer_t gpu_buffer;
+printf("init gpu_buffer\n");
     status = io_buffer_init_physical_with_bti(&gpu_buffer, bus->bti, S912_MALI_BASE,
                                               S912_MALI_LENGTH, get_root_resource(),
                                               ZX_CACHE_POLICY_UNCACHED_DEVICE);
@@ -153,8 +160,11 @@ zx_status_t vim_mali_init(vim_bus_t* bus) {
     }
 
 done:
+printf("release hiu_buffer\n");
     io_buffer_release(&hiu_buffer);
+printf("release preset_buffer\n");
     io_buffer_release(&preset_buffer);
+printf("release gpu_buffer\n");
     io_buffer_release(&gpu_buffer);
 
     return status;
