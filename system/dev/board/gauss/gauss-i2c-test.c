@@ -41,9 +41,9 @@ static zx_protocol_device_t i2c_test_device_protocol = {
     .release = i2c_test_release,
 };
 
-static void i2c_complete(zx_status_t status, const uint8_t* data, size_t actual, void* cookie) {
-    if (actual != 8) {
-        zxlogf(ERROR, "gauss-i2c-test i2c_complete expected 8 bytes, got %zu\n", actual);
+static void i2c_complete(zx_status_t status, const uint8_t* data, void* cookie) {
+    if (status != ZX_OK) {
+        zxlogf(ERROR, "gauss-i2c-test i2c_complete error: %d\n", status);
     }
     zxlogf(INFO, "gauss-i2c-test: %02X %02X %02X %02X %02X %02X %02X %02X\n", data[0], data[1],
            data[2], data[3], data[4], data[5], data[6], data[7]);

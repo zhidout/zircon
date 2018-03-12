@@ -71,12 +71,11 @@ fail:
     return status;
 }
 
-static void pdev_i2c_complete(platform_proxy_t* proxy, pdev_resp_t* resp, const uint8_t* data,
-                              size_t actual) {
+static void pdev_i2c_complete(platform_proxy_t* proxy, pdev_resp_t* resp, const uint8_t* data) {
     pdev_i2c_txn_ctx_t* ctx = &resp->i2c_txn;
 
     if (ctx->complete_cb) {
-        ctx->complete_cb(resp->status, data, actual, ctx->cookie);
+        ctx->complete_cb(resp->status, data, ctx->cookie);
     }
 }
 
@@ -189,9 +188,9 @@ static zx_status_t pdev_i2c_get_max_transfer_size(void* ctx, uint32_t index, siz
     return status;
 }
 
-static zx_status_t pdev_i2c_transact(void* ctx, uint32_t index, const void* write_buf, size_t write_length,
-                                     size_t read_length, i2c_complete_cb complete_cb,
-                                     void* cookie) {
+static zx_status_t pdev_i2c_transact(void* ctx, uint32_t index, const void* write_buf,
+                                     size_t write_length, size_t read_length,
+                                     i2c_complete_cb complete_cb, void* cookie) {
     platform_proxy_t* proxy = ctx;
 
     if (!read_length && !write_length) {
@@ -235,7 +234,15 @@ static zx_status_t pdev_i2c_transact(void* ctx, uint32_t index, const void* writ
     // TODO(voydanoff) This proxying code actually implements i2c_transact synchronously
     // due to the fact that it is unsafe to respond asynchronously on the devmgr rxrpc channel.
     // In the future we may want to redo the plumbing to allow this to be truly asynchronous.
-    pdev_i2c_complete(proxy, &resp.resp, resp.data, data_received);
+    if (data_received != read_length) {
+        status = ZX_ERR_INTERNAL;
+    } else {
+        status = resp.resp.status;
+    }
+    if (complete_cb) {
+        complete_cb(status, resp.data, resp.resp.i2c_txn.cookie);
+    }
+
     return ZX_OK;
 }
 

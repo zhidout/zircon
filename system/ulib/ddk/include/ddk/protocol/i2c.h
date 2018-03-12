@@ -15,8 +15,7 @@ __BEGIN_CDECLS;
 #define I2C_10_BIT_ADDR_MASK 0xF000
 
 // Completion callback for i2c_transact()
-typedef void (*i2c_complete_cb)(zx_status_t status, const uint8_t* data, size_t actual,
-                                void* cookie);
+typedef void (*i2c_complete_cb)(zx_status_t status, const uint8_t* data, void* cookie);
 
 // Protocol for i2c
 typedef struct {
@@ -59,28 +58,26 @@ static inline zx_status_t i2c_get_max_transfer_size(i2c_protocol_t* i2c, uint32_
 typedef struct {
     completion_t completion;
     void* read_buf;
-    size_t actual;
+    size_t read_length;
     zx_status_t result;
 } pdev_i2c_ctx_t;
 
-static inline void pdev_i2c_sync_cb(zx_status_t status, const uint8_t* data, size_t actual,
-                                    void* cookie) {
+static inline void pdev_i2c_sync_cb(zx_status_t status, const uint8_t* data, void* cookie) {
     pdev_i2c_ctx_t* ctx = (pdev_i2c_ctx_t *)cookie;
     ctx->result = status;
-    ctx->actual = actual;
-    if (status == ZX_OK && ctx->read_buf && actual) {
-        memcpy(ctx->read_buf, data, actual);
+    if (status == ZX_OK && ctx->read_buf && ctx->read_length) {
+        memcpy(ctx->read_buf, data, ctx->read_length);
     }
 
     completion_signal(&ctx->completion);
 }
 
 static inline zx_status_t i2c_transact_sync(i2c_protocol_t* i2c, uint32_t index, const void* write_buf,
-                                            size_t write_length, void* read_buf, size_t read_length,
-                                            size_t* out_read_actual) {
+                                            size_t write_length, void* read_buf, size_t read_length) {
     pdev_i2c_ctx_t ctx;
     completion_reset(&ctx.completion);
     ctx.read_buf = read_buf;
+    ctx.read_length = read_length;
 
     zx_status_t status = i2c_transact(i2c, index, write_buf, write_length, read_length,
                                        pdev_i2c_sync_cb, &ctx);
@@ -89,9 +86,6 @@ static inline zx_status_t i2c_transact_sync(i2c_protocol_t* i2c, uint32_t index,
     }
     status = completion_wait(&ctx.completion, ZX_TIME_INFINITE);
     if (status == ZX_OK) {
-        if (out_read_actual) {
-            *out_read_actual = ctx.actual;
-        }
         return ctx.result;
     } else {
         return status;
