@@ -51,21 +51,13 @@ static void i2c_complete(zx_status_t status, const uint8_t* data, size_t actual,
 
 static int i2c_test_thread(void *arg) {
     i2c_test_t* i2c_test = arg;
-    i2c_channel_t channel;
-
-    zx_status_t status = i2c_get_channel(&i2c_test->i2c, 0, &channel);
-    if (status != ZX_OK) {
-        zxlogf(ERROR, "i2c_test_thread: i2c_get_channel failed %d\n", status);
-        return status;
-    }
 
     while (!i2c_test->done) {
         char write_buf[1] = { 0 };
-        i2c_transact(&channel, write_buf, sizeof(write_buf), 8, i2c_complete, NULL);
+        i2c_transact(&i2c_test->i2c, 0, write_buf, sizeof(write_buf), 8, i2c_complete, NULL);
         sleep(1);
     }
 
-    i2c_channel_release(&channel);
     return 0;
 }
 
