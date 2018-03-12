@@ -21,7 +21,6 @@ typedef void (*i2c_complete_cb)(zx_status_t status, const uint8_t* data, void* c
 typedef struct {
     zx_status_t (*transact)(void* ctx, uint32_t index, const void* write_buf, size_t write_length,
                             size_t read_length, i2c_complete_cb complete_cb, void* cookie);
-    zx_status_t (*set_bitrate)(void* ctx, uint32_t index, uint32_t bitrate);
     zx_status_t (*get_max_transfer_size)(void* ctx, uint32_t index, size_t* out_size);
 } i2c_protocol_ops_t;
 
@@ -42,11 +41,6 @@ static inline zx_status_t i2c_transact(i2c_protocol_t* i2c, uint32_t index, cons
                                        i2c_complete_cb complete_cb, void* cookie) {
     return i2c->ops->transact(i2c->ctx, index, write_buf, write_length, read_length, complete_cb,
                                   cookie);
-}
-
-// Sets the bitrate for the i2c channel
-static inline zx_status_t i2c_set_bitrate(i2c_protocol_t* i2c, uint32_t index, uint32_t bitrate) {
-    return i2c->ops->set_bitrate(i2c->ctx, index, bitrate);
 }
 
 // Returns the maximum transfer size for read and write operations on the channel.

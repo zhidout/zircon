@@ -246,26 +246,12 @@ static zx_status_t pdev_i2c_transact(void* ctx, uint32_t index, const void* writ
     return ZX_OK;
 }
 
-static zx_status_t pdev_i2c_set_bitrate(void* ctx, uint32_t index, uint32_t bitrate) {
-    platform_proxy_t* proxy = ctx;
-    pdev_req_t req = {
-        .op = PDEV_I2C_SET_BITRATE,
-        .index = index,
-        .i2c_bitrate = bitrate,
-    };
-    pdev_resp_t resp;
-
-    return platform_dev_rpc(proxy, &req, sizeof(req), &resp, sizeof(resp), NULL, 0,
-                            NULL);
-}
-
 static void pdev_i2c_channel_release(void* ctx) {
     free(ctx);
 }
 
 static i2c_protocol_ops_t i2c_ops = {
     .transact = pdev_i2c_transact,
-    .set_bitrate = pdev_i2c_set_bitrate,
     .get_max_transfer_size = pdev_i2c_get_max_transfer_size,
 };
 
