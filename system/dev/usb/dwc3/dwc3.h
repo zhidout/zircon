@@ -33,6 +33,9 @@
 // converts a USB endpoint address to 0 - 31 index
 #define dwc3_ep_num(addr) ((((addr) & 0xF) << 1) | !!((addr) & USB_DIR_IN))
 
+// converts a 0 - 31 index to USB endpoint address
+#define dwc3_ep_address(index) ((((index) >> 1) | ((index) == 1 ? 0 : ((index) & 1) << 7)))
+
 typedef enum {
     EP0_STATE_NONE,
     EP0_STATE_SETUP,            // Queued setup phase

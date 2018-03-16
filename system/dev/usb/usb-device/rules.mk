@@ -18,13 +18,21 @@ MODULE_LIBS := \
     system/ulib/zircon \
     system/ulib/c
 
-
 # Set default configuration here, rather than relying on usbctl to do it
+ifeq (x,x)
 MODULE_DEFINES := USB_DEVICE_VID=0x18D1 \
                   USB_DEVICE_PID=0xA020 \
                   USB_DEVICE_MANUFACTURER=\"Zircon\" \
                   USB_DEVICE_PRODUCT=\"CDC-Ethernet\" \
                   USB_DEVICE_SERIAL=\"0123456789ABCDEF\" \
                   USB_DEVICE_FUNCTIONS=\"cdc\"
+else
+MODULE_DEFINES := USB_DEVICE_VID=0x18D1 \
+                  USB_DEVICE_PID=0xA021 \
+                  USB_DEVICE_MANUFACTURER=\"Zircon\" \
+                  USB_DEVICE_PRODUCT=\"UMS\" \
+                  USB_DEVICE_SERIAL=\"0123456789ABCDEF\" \
+                  USB_DEVICE_FUNCTIONS=\"ums\"
+endif
 
 include make/module.mk
