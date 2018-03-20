@@ -58,8 +58,6 @@ public:
     void Dump(bool dump_pages, bool dump_free_ranges) const;
 
 private:
-    fbl::Canary<fbl::magic("PARN")> canary_;
-
     pmm_arena_info_t info_ = {};
     vm_page_t* page_array_ = nullptr;
 };

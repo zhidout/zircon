@@ -33,11 +33,6 @@ typedef struct vm_page {
 
     union {
         struct {
-            // in allocated/just freed state, use a linked list to hold the page in a queue
-            //struct list_node node;
-            // offset: 0x30
-        } free;
-        struct {
             // attached to a vm object
             uint64_t offset; // unused currently
             // offset: 0x28
@@ -55,9 +50,6 @@ typedef struct vm_page {
 
     // helper routines
     bool is_free();
-
-    // state manipulation routines
-    void set_state_alloc();
 } vm_page_t;
 
 // assert that the page structure isn't growing uncontrollably
@@ -83,5 +75,5 @@ const char* page_state_to_string(unsigned int state);
 void dump_page(const vm_page_t* page);
 
 // state transition routines
-void pmm_page_set_state_alloc(vm_page *page);
-void pmm_page_set_state_wired(vm_page *page);
+//void pmm_page_set_state_alloc(vm_page *page);
+//void pmm_page_set_state_wired(vm_page *page);

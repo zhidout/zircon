@@ -329,7 +329,7 @@ zx_status_t ArmArchVmAspace::AllocPageTable(paddr_t* paddrp, uint page_size_shif
 
     if (size > PAGE_SIZE) {
         size_t count = size / PAGE_SIZE;
-        size_t ret = pmm_alloc_contiguous(count, PMM_ALLOC_FLAG_KMAP,
+        size_t ret = pmm_alloc_contiguous(count, 0,
                                           static_cast<uint8_t>(page_size_shift), paddrp, NULL);
         if (ret != count)
             return ZX_ERR_NO_MEMORY;

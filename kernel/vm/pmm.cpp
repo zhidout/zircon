@@ -82,14 +82,14 @@ size_t pmm_alloc_contiguous(size_t count, uint alloc_flags, uint8_t alignment_lo
     return pmm_node.AllocContiguous(count, alloc_flags, alignment_log2, pa, list);
 }
 
-/* physically allocate a run from arenas marked as KMAP */
+/* physically allocate a run and return the physmap address */
 void* pmm_alloc_kpages(size_t count, list_node* list, paddr_t* _pa) {
     LTRACEF("count %zu\n", count);
 
     paddr_t pa;
     /* fast path for single count allocations */
     if (count == 1) {
-        vm_page_t* p = pmm_node.AllocPage(PMM_ALLOC_FLAG_KMAP, &pa);
+        vm_page_t* p = pmm_node.AllocPage(0, &pa);
         if (!p)
             return nullptr;
 
@@ -97,7 +97,7 @@ void* pmm_alloc_kpages(size_t count, list_node* list, paddr_t* _pa) {
             list_add_tail(list, &p->queue_node);
         }
     } else {
-        size_t alloc_count = pmm_node.AllocContiguous(count, PMM_ALLOC_FLAG_KMAP, PAGE_SIZE_SHIFT, &pa, list);
+        size_t alloc_count = pmm_node.AllocContiguous(count, 0, PAGE_SIZE_SHIFT, &pa, list);
         if (alloc_count == 0)
             return nullptr;
     }
@@ -111,12 +111,12 @@ void* pmm_alloc_kpages(size_t count, list_node* list, paddr_t* _pa) {
     return ptr;
 }
 
-/* allocate a single page from a KMAP arena and return its virtual address */
+/* allocate a single page and return the physmap address */
 void* pmm_alloc_kpage(paddr_t* _pa, vm_page_t** _p) {
     LTRACE_ENTRY;
 
     paddr_t pa;
-    vm_page_t* p = pmm_node.AllocPage(PMM_ALLOC_FLAG_KMAP, &pa);
+    vm_page_t* p = pmm_node.AllocPage(0, &pa);
     if (!p)
         return nullptr;
 

@@ -23,8 +23,7 @@ typedef struct pmm_arena_info {
     size_t size;
 } pmm_arena_info_t;
 
-#define PMM_ARENA_FLAG_KMAP   (0x1) // this arena is mapped into the kernel and useful for kallocs
-#define PMM_ARENA_FLAG_LO_MEM (0x2) // this arena is contained within architecturally-defined 'low memory'
+#define PMM_ARENA_FLAG_LO_MEM (0x1) // this arena is contained within architecturally-defined 'low memory'
 
 // Add a pre-filled memory arena to the physical allocator.
 // The arena data will be copied.
@@ -32,8 +31,7 @@ zx_status_t pmm_add_arena(const pmm_arena_info_t* arena);
 
 // flags for allocation routines below
 #define PMM_ALLOC_FLAG_ANY    (0x0) // no restrictions on which arena to allocate from
-#define PMM_ALLOC_FLAG_KMAP   (0x1) // allocate only from arenas marked KMAP
-#define PMM_ALLOC_FLAG_LO_MEM (0x2) // allocate only from arenas marked LO_MEM
+#define PMM_ALLOC_FLAG_LO_MEM (0x1) // allocate only from arenas marked LO_MEM
 
 // Allocate count pages of physical memory, adding to the tail of the passed list.
 // The list must be initialized.
