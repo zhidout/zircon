@@ -11,28 +11,25 @@ PLATFORM := generic-arm
 
 MODULE := $(LOCAL_DIR)
 
+LEGACY_LOADER_SRC := $(LOCAL_DIR)/legacy-loader.S
+LEGACY_LOADER_OBJ := $(BUILDDIR)/legacy-loader.o
+LEGACY_LOADER_BIN := $(BUILDDIR)/legacy-loader.bin
+LEGACY_KERNEL_IMAGE := $(BUILDDIR)/legacy-zircon.bin
 
-LEGACY_HEADER_SRC := $(LOCAL_DIR)/legacy-header.S
-LEGACY_HEADER_OBJ := $(BUILDDIR)/legacy-header.o
-LEGACY_HEADER_BIN := $(BUILDDIR)/legacy-header.bin
-
-$(LEGACY_HEADER_OBJ): $(LEGACY_HEADER_SRC)
+$(LEGACY_LOADER_OBJ): $(LEGACY_LOADER_SRC)
 	@$(MKDIR)
 	$(call BUILDECHO, compiling $<)
 	$(NOECHO)$(CC) -Ikernel/arch/arm64/include -Isystem/public -c $< -MMD -MP -MT $@ -MF $(@:%o=%d) -o $@
 
-$(LEGACY_HEADER_BIN): $(LEGACY_HEADER_OBJ)
+$(LEGACY_LOADER_BIN): $(LEGACY_LOADER_OBJ)
 	$(call BUILDECHO,generating $@)
 	$(NOECHO)$(OBJCOPY) -O binary $< $@
 
-GENERATED += $(LEGACY_HEADER_BIN)
-
+GENERATED += $(LEGACY_LOADER_BIN)
 
 # prepend legacy header to kernel image
-LEGACY_KERNEL_IMAGE := $(BUILDDIR)/legacy-zircon.bin
-
-$(LEGACY_KERNEL_IMAGE): $(LEGACY_HEADER_BIN) $(OUTLKBIN)
-	$(NOECHO)cat $(LEGACY_HEADER_BIN) $(OUTLKBIN) > $(LEGACY_KERNEL_IMAGE)
+$(LEGACY_KERNEL_IMAGE): $(LEGACY_LOADER_BIN) $(OUTLKBIN)
+	$(NOECHO)cat $(LEGACY_LOADER_BIN) $(OUTLKBIN) > $(LEGACY_KERNEL_IMAGE)
 
 EXTRA_KERNELDEPS += $(LEGACY_KERNEL_IMAGE)
 
