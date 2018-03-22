@@ -39,7 +39,7 @@ EXTRA_KERNELDEPS += $(LEGACY_KERNEL_IMAGE)
 # Some boards need gzipped kernel image
 OUT_ZIRCON_ZIMAGE := $(BUILDDIR)/z$(LKNAME).bin
 
-$(OUT_ZIRCON_ZIMAGE): $(OUTLKBIN)
+$(OUT_ZIRCON_ZIMAGE): $(LEGACY_KERNEL_IMAGE)
 	$(call BUILDECHO,gzipping image $@)
 	$(NOECHO)gzip -c $< > $@
 
