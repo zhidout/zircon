@@ -70,7 +70,7 @@ _loader:
     
     add     foo, kern_base, #64    // skip two bootdata records to get address of _start offset in x10
     ldr     foo, [foo]          // read the _start offset
-    add     foo, foo, bd_base    // add it to beginning of bootdata
+    add     foo, foo, kern_base // add it to beginning of bootdata
     br      foo                 // jump to it
 
 _fail:
