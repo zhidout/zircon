@@ -11,4 +11,6 @@ PLATFORM_PID := 1   # PDEV_PID_VIM
 PLATFORM_BOARD_NAME := vim
 PLATFORM_MDI_SRCS := $(LOCAL_DIR)/vim.mdi
 
+USE_LEGACY_LOADER := true
+
 include make/board.mk

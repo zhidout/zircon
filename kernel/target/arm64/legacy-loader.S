@@ -25,7 +25,7 @@ bar32       .req w16
 
 _loader:
     adr     bd_base, _bootdata
-//    mov     x0, bd_base             // leave pointer to boot data in x0 for the kernel
+    mov     x0, bd_base             // leave pointer to boot data in x0 for the kernel
 
     // sanity check the bootdata headers
     ldr     foo32, [bd_base, 0]
