@@ -30,7 +30,7 @@ cpuid                   .req x19
 page_table0             .req x20
 page_table1             .req x21
 
-.section .text.boot0, "a", @progbits
+.section .text.boot, "a", @progbits
 FUNCTION(_start)
     /* Save the Boot info for the primary CPU only */
     mrs     cpuid, mpidr_el1

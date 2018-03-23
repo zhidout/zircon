@@ -11,5 +11,8 @@ PLATFORM_VID := 1   # PDEV_VID_QEMU
 PLATFORM_PID := 1   # PDEV_PID_QEMU
 PLATFORM_BOARD_NAME := qemu
 PLATFORM_MDI_SRCS += $(LOCAL_DIR)/qemu.mdi
+PLATFORM_CMDLINE := $(LOCAL_DIR)/cmdline.txt
+
+USE_LEGACY_LOADER := true
 
 include make/board.mk

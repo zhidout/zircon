@@ -10,5 +10,8 @@ PLATFORM_VID := 4   # PDEV_VID_KHADAS
 PLATFORM_PID := 1   # PDEV_PID_VIM
 PLATFORM_BOARD_NAME := vim
 PLATFORM_MDI_SRCS := $(LOCAL_DIR)/vim.mdi
+PLATFORM_CMDLINE := $(LOCAL_DIR)/cmdline.txt
+
+USE_LEGACY_LOADER := true
 
 include make/board.mk

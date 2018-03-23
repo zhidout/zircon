@@ -10,6 +10,7 @@ PLATFORM_VID := 7   # PDEV_VID_HARDKERNEL
 PLATFORM_PID := 1   # PDEV_PID_ODROID_C2
 PLATFORM_BOARD_NAME := odroidc2
 PLATFORM_MDI_SRCS := $(LOCAL_DIR)/odroidc2.mdi
+PLATFORM_CMDLINE := $(LOCAL_DIR)/cmdline.txt
 
 include make/board.mk
 
