@@ -15,6 +15,7 @@
 #include <mdi/mdi-defs.h>
 #include <pdev/driver.h>
 #include <dev/psci.h>
+#include <vm/physmap.h>
 
 static uint64_t preset_base;
 static uint64_t hiu_base;
@@ -75,13 +76,13 @@ static void s912_hdcp_init(mdi_node_ref_t* node, uint level)
     mdi_node_ref_t child;
     mdi_each_child(node, &child) {
         switch (mdi_id(&child)) {
-        case MDI_HDMI_HDCP_PRESET_BASE_VIRT:
+        case MDI_HDMI_HDCP_PRESET_BASE_PHYS:
             got_preset = !mdi_node_uint64(&child, &preset_base);
             break;
-        case MDI_HDMI_HDCP_HIU_BASE_VIRT:
+        case MDI_HDMI_HDCP_HIU_BASE_PHYS:
             got_hiu = !mdi_node_uint64(&child, &hiu_base);
             break;
-        case MDI_HDMI_HDCP_HDMITX_BASE_VIRT:
+        case MDI_HDMI_HDCP_HDMITX_BASE_PHYS:
             got_hdmitx = !mdi_node_uint64(&child, &hdmitx_base);
             break;
         }
@@ -96,6 +97,11 @@ static void s912_hdcp_init(mdi_node_ref_t* node, uint level)
     if (!got_hdmitx) {
         panic("amlogc hdcp: MDI_HDMI_HDCP_HDMITXBASE_VIRT not defined\n");
     }
+
+    // convert physical addresses to virtual
+    preset_base = (uint64_t)paddr_to_physmap(preset_base);
+    hiu_base = (uint64_t)paddr_to_physmap(hiu_base);
+    hdmitx_base = (uint64_t)paddr_to_physmap(hdmitx_base);
 
     // enable clocks
     SET_BIT32(HHI, HHI_HDMI_CLK_CNTL, 0x0100, 16, 0);

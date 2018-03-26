@@ -10,6 +10,7 @@
 #include <mdi/mdi-defs.h>
 #include <pdev/driver.h>
 #include <pdev/power.h>
+#include <vm/physmap.h>
 #include <stdio.h>
 
 #define PMU_HRST_OFFSET         0x404
@@ -48,10 +49,10 @@ static void hisi_power_init(mdi_node_ref_t* node, uint level) {
     mdi_node_ref_t child;
     mdi_each_child(node, &child) {
         switch (mdi_id(&child)) {
-        case MDI_HISI_POWER_SCTRL_BASE_VIRT:
+        case MDI_HISI_POWER_SCTRL_BASE_PHYS:
             got_sctrl = !mdi_node_uint64(&child, &sctrl_base);
             break;
-        case MDI_HISI_POWER_PMU_BASE_VIRT:
+        case MDI_HISI_POWER_PMU_BASE_PHYS:
             got_pmu = !mdi_node_uint64(&child, &pmu_base);
             break;
         }
@@ -63,6 +64,10 @@ static void hisi_power_init(mdi_node_ref_t* node, uint level) {
     if (!got_pmu) {
         panic("hisi power uart: MDI_HISI_POWER_PMU_BASE_VIRT not defined\n");
     }
+
+    // convert physical addresses to virtual
+    sctrl_base = (uint64_t)paddr_to_physmap(sctrl_base);
+    pmu_base = (uint64_t)paddr_to_physmap(pmu_base);
 
     pdev_register_power(&hisi_power_ops);
 }

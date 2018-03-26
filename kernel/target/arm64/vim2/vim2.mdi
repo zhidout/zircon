@@ -18,13 +18,10 @@ mem-map = {
     }
 }
 
-const PERIPH_VIRT = 0xffffffffc0000000
-const PERIPH_PHYS = 0xc0000000
-
 periph-mem-map = {
     bank = {
-        base-virt = PERIPH_VIRT
-        base-phys = PERIPH_PHYS
+        base-virt = 0xffffffffc0000000
+        base-phys = 0xc0000000
         length = 0x20000000
     }
 }
@@ -54,13 +51,11 @@ boot-reserve-mem-map = {
 
 kernel = {
     s905-uart = {
-        base-virt = PERIPH_VIRT + 0x81004c0
-        base-phys = PERIPH_PHYS + 0x81004c0
+        base-phys = 0xc81004c0
         irq = 225
     }
     arm-gic-v2 = {
-        base-virt = PERIPH_VIRT + 0x4300000
-        base-phys = PERIPH_PHYS + 0x4300000
+        base-phys = 0xc4300000
         gicd-offset = 0x1000
         gicc-offset = 0x2000
         gich-offset = 0x4000
@@ -76,8 +71,8 @@ kernel = {
         irq-phys = 30
     }
     hdmi-hdcp = {
-        preset-virt = PERIPH_VIRT + 0x1104000
-        hiu-virt =  PERIPH_VIRT + 0x883C000
-        hdmitx-virt = PERIPH_VIRT + 0x883A000
+        preset-phys = 0x1104000
+        hiu-phys =  0x883C000
+        hdmitx-phys = 0x883A000
     }
 }
