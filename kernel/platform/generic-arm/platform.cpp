@@ -547,7 +547,7 @@ void platform_early_init(void) {
                              &ramdisk_size, &arena_size);
             dprintf(INFO, "found device tree in x0\n");
 
-            if (boot_structure_kvaddr1) {
+            if (!ramdisk_base && boot_structure_kvaddr1) {
                 if (is_bootdata_container(boot_structure_kvaddr1)) {
                     dprintf(INFO, "found bootdata in x1\n");
                     // use bootdata that was passed from the loader shim instead of
